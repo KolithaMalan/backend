@@ -8,6 +8,7 @@ const {
     notifyPMApproved,
     notifyRideAssigned,
     notifyRideReassigned,
+    notifyAdminApproved,
     notifyRideRejected,
     notifyRideCompleted,
    notifyPMAboutAdminApproval // ✅ NEW
@@ -434,25 +435,73 @@ const pmRejectRide = async (req, res) => {
             });
         }
 
-        if (ride.status !== 'awaiting_pm') {
+        // ✅ UPDATED: Allow PM to reject if status is awaiting_admin AND requires PM approval
+        if (ride.status !== 'awaiting_pm' && ride.status !== 'awaiting_admin') {
             return res.status(400).json({
                 success: false,
-                message: 'This ride is not awaiting PM approval'
+                message: 'This ride cannot be rejected at this stage'
             });
         }
 
+        // ✅ Check if PM approval is required
+        if (!ride.requiresPMApproval) {
+            return res.status(400).json({
+                success: false,
+                message: 'This ride does not require PM approval'
+            });
+        }
+
+        // ✅ Update ride status
         ride.status = 'rejected';
         ride.rejectedBy.user = req.user._id;
+        ride.rejectedBy.role = 'project_manager'; // ✅ ADD ROLE
         ride.rejectedBy.rejectedAt = new Date();
         ride.rejectedBy.reason = reason || null;
         await ride.save();
 
-        // Send rejection notification
+        // ✅ Populate for notifications
+        await ride.populate('requester', 'name email phone');
+
+        // ✅ Notify requester about rejection
         await notifyRideRejected(ride, req.user);
+
+        // ✅ NEW: Notify Admin that PM rejected the ride
+        const admin = await User.findOne({ email: config.HARDCODED_USERS.ADMIN.email });
+        if (admin) {
+            const { sendEmail, emailTemplates } = require('../services/emailService');
+            const { sendSMS } = require('../services/smsService');
+            
+            // Email to Admin
+            await sendEmail({
+                to: admin.email,
+                subject: `PM Rejected Ride #${ride.rideId}`,
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                        <h2 style="color: #c62828;">PM Rejected Ride Request</h2>
+                        <p>Project Manager ${req.user.name} has rejected ride request #${ride.rideId}.</p>
+                        <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                            <p><strong>Ride ID:</strong> ${ride.rideId}</p>
+                            <p><strong>Requester:</strong> ${ride.requester.name}</p>
+                            <p><strong>Distance:</strong> ${ride.calculatedDistance} km</p>
+                            <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
+                            ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+                        </div>
+                    </div>
+                `
+            });
+            
+            // SMS to Admin
+            await sendSMS({
+                to: admin.phone,
+                message: `RideManager: PM rejected ride #${ride.rideId} (${ride.calculatedDistance}km). ${reason ? 'Reason: ' + reason.substring(0, 80) : ''}`
+            });
+
+            console.log(`✅ Admin notified of PM rejection for ride #${ride.rideId}`);
+        }
 
         res.status(200).json({
             success: true,
-            message: 'Ride rejected',
+            message: 'Ride rejected successfully. Requester and Admin have been notified.',
             ride
         });
     } catch (error) {
@@ -465,9 +514,6 @@ const pmRejectRide = async (req, res) => {
     }
 };
 
-// @desc    Admin approve ride
-// @route   PUT /api/rides/:id/admin-approve
-// @access  Private (Admin only)
 // @desc    Admin approve ride
 // @route   PUT /api/rides/:id/admin-approve
 // @access  Private (Admin only)
@@ -513,10 +559,8 @@ const adminApproveRide = async (req, res) => {
 
         await ride.populate('requester', 'name email phone');
 
-        // ✅ If it's a long-distance ride, notify PM about admin approval with note
-        if (ride.requiresPMApproval && note) {
-            await notifyPMAboutAdminApproval(ride, req.user, note);
-        }
+        // ✅ Send notifications (PM + User for long distance, User only for regular)
+        await notifyAdminApproved(ride, req.user, note || 'No note provided');
 
         res.status(200).json({
             success: true,
@@ -557,12 +601,50 @@ const adminRejectRide = async (req, res) => {
 
         ride.status = 'rejected';
         ride.rejectedBy.user = req.user._id;
+        ride.rejectedBy.role = 'admin'; // ✅ ADD ROLE
         ride.rejectedBy.rejectedAt = new Date();
         ride.rejectedBy.reason = reason || null;
         await ride.save();
 
-        // Send rejection notification
+        // ✅ Populate for notifications
+        await ride.populate('requester', 'name email phone');
+
+        // Send rejection notification to requester
         await notifyRideRejected(ride, req.user);
+
+        // ✅ NEW: If it was a long-distance ride, notify PM
+        if (ride.requiresPMApproval) {
+            const pm = await User.findOne({ email: config.HARDCODED_USERS.PROJECT_MANAGER.email });
+            if (pm) {
+                const { sendEmail } = require('../services/emailService');
+                const { sendSMS } = require('../services/smsService');
+                
+                await sendEmail({
+                    to: pm.email,
+                    subject: `Admin Rejected Ride #${ride.rideId}`,
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <h2 style="color: #c62828;">Admin Rejected Long Distance Ride</h2>
+                            <p>Admin ${req.user.name} has rejected ride request #${ride.rideId}.</p>
+                            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                                <p><strong>Ride ID:</strong> ${ride.rideId}</p>
+                                <p><strong>Requester:</strong> ${ride.requester.name}</p>
+                                <p><strong>Distance:</strong> ${ride.calculatedDistance} km</p>
+                                <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
+                                ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+                            </div>
+                        </div>
+                    `
+                });
+                
+                await sendSMS({
+                    to: pm.phone,
+                    message: `RideManager: Admin rejected ride #${ride.rideId} (${ride.calculatedDistance}km). ${reason ? 'Reason: ' + reason.substring(0, 80) : ''}`
+                });
+
+                console.log(`✅ PM notified of Admin rejection for ride #${ride.rideId}`);
+            }
+        }
 
         res.status(200).json({
             success: true,

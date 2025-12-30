@@ -37,54 +37,110 @@ const sendEmail = async ({ to, subject, html, text }) => {
 
 // Email Templates
 const emailTemplates = {
-    // Ride created notification to Admin
-    // ✅ NEW: Long distance ride notification to Admin (dual approval system)
-rideCreatedForAdminLongDistance: (ride, user) => ({
-    subject: `⚠️ Long Distance Ride #${ride.rideId} - Dual Approval Available`,
-    html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
-            <div style="background: white; padding: 30px; border-radius: 8px;">
-                <h1 style="color: #1a5f2a; margin-bottom: 20px;">⚠️ Long Distance Ride Request</h1>
-
-                <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
-                    <p style="color: #e65100; margin: 0; font-weight: bold;">
-                        🚨 This ride exceeds 15km. You can approve it with a note, or wait for PM approval.
+    
+    // ✅ NEW: Ride created notification to Admin (SHORT distance - ≤15km)
+    rideCreatedForAdmin: (ride, user) => ({
+        subject: `🚗 New Ride Request #${ride.rideId} - Approval Required`,
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
+                <div style="background: white; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: #1a5f2a; margin-bottom: 20px;">🚗 New Ride Request</h1>
+                    
+                    <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+                        <p style="color: #2e7d32; margin: 0; font-weight: bold;">
+                            A new ride request has been submitted and requires your approval.
+                        </p>
+                    </div>
+                    
+                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="color: #333; margin-top: 0;">Ride Details</h3>
+                        <p><strong>Ride ID:</strong> #${ride.rideId}</p>
+                        <p><strong>Requester:</strong> ${user.name} (${user.email})</p>
+                        <p><strong>Phone:</strong> ${user.phone || 'N/A'}</p>
+                        <p><strong>Type:</strong> ${ride.rideType === 'one_way' ? 'One-Way' : 'Return Trip'}</p>
+                        <p><strong>Distance:</strong> ${ride.calculatedDistance} km</p>
+                        <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
+                        <p><strong>Time:</strong> ${ride.scheduledTime}</p>
+                    </div>
+                    
+                    <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #1a5f2a; margin-top: 0;">📍 Pickup Location</h4>
+                        <p style="margin: 0;">${ride.pickupLocation.address}</p>
+                    </div>
+                    
+                    <div style="background: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="color: #c62828; margin-top: 0;">📍 Destination</h4>
+                        <p style="margin: 0;">${ride.destinationLocation.address}</p>
+                    </div>
+                    
+                    ${ride.purpose ? `
+                        <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                            <h4 style="color: #e65100; margin-top: 0;">📝 Purpose</h4>
+                            <p style="margin: 0;">${ride.purpose}</p>
+                        </div>
+                    ` : ''}
+                    
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="${process.env.ADMIN_DASHBOARD_URL}" style="background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                            Review & Assign Driver
+                        </a>
+                    </div>
+                    
+                    <p style="color: #666; font-size: 12px; margin-top: 30px; text-align: center;">
+                        This is an automated message from RideManager System
                     </p>
                 </div>
-                
-                <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                    <h3 style="color: #333; margin-top: 0;">Ride Details</h3>
-                    <p><strong>Ride ID:</strong> #${ride.rideId}</p>
-                    <p><strong>Requester:</strong> ${user.name} (${user.email})</p>
-                    <p><strong>Type:</strong> ${ride.rideType === 'one_way' ? 'One-Way' : 'Return Trip'}</p>
-                    <p><strong>Distance:</strong> <span style="color: #d32f2f; font-weight: bold;">${ride.calculatedDistance} km</span></p>
-                    <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
-                    <p><strong>Time:</strong> ${ride.scheduledTime}</p>
-                </div>
-                
-                <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="color: #1a5f2a; margin-top: 0;">📍 Pickup Location</h4>
-                    <p style="margin: 0;">${ride.pickupLocation.address}</p>
-                </div>
-                
-                <div style="background: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="color: #c62828; margin-top: 0;">📍 Destination</h4>
-                    <p style="margin: 0;">${ride.destinationLocation.address}</p>
-                </div>
-                
-                <div style="text-align: center; margin-top: 30px;">
-                    <a href="${process.env.ADMIN_DASHBOARD_URL}" style="background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-                        Go to Dashboard
-                    </a>
-                </div>
-                
-                <p style="color: #666; font-size: 12px; margin-top: 30px; text-align: center;">
-                    This is an automated message from RideManager System
-                </p>
             </div>
-        </div>
-    `
-}),
+        `
+    }),
+
+    // ✅ Long distance ride notification to Admin (dual approval system)
+    rideCreatedForAdminLongDistance: (ride, user) => ({
+        subject: `⚠️ Long Distance Ride #${ride.rideId} - Dual Approval Available`,
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
+                <div style="background: white; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: #1a5f2a; margin-bottom: 20px;">⚠️ Long Distance Ride Request</h1>
+
+                    <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
+                        <p style="color: #e65100; margin: 0; font-weight: bold;">
+                            🚨 This ride exceeds 15km. You can approve it with a note, or wait for PM approval.
+                        </p>
+                    </div>
+                    
+                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="color: #333; margin-top: 0;">Ride Details</h3>
+                        <p><strong>Ride ID:</strong> #${ride.rideId}</p>
+                        <p><strong>Requester:</strong> ${user.name} (${user.email})</p>
+                        <p><strong>Type:</strong> ${ride.rideType === 'one_way' ? 'One-Way' : 'Return Trip'}</p>
+                        <p><strong>Distance:</strong> <span style="color: #d32f2f; font-weight: bold;">${ride.calculatedDistance} km</span></p>
+                        <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
+                        <p><strong>Time:</strong> ${ride.scheduledTime}</p>
+                    </div>
+                    
+                    <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="color: #1a5f2a; margin-top: 0;">📍 Pickup Location</h4>
+                        <p style="margin: 0;">${ride.pickupLocation.address}</p>
+                    </div>
+                    
+                    <div style="background: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="color: #c62828; margin-top: 0;">📍 Destination</h4>
+                        <p style="margin: 0;">${ride.destinationLocation.address}</p>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="${process.env.ADMIN_DASHBOARD_URL}" style="background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                            Go to Dashboard
+                        </a>
+                    </div>
+                    
+                    <p style="color: #666; font-size: 12px; margin-top: 30px; text-align: center;">
+                        This is an automated message from RideManager System
+                    </p>
+                </div>
+            </div>
+        `
+    }),
 
     // Ride created notification to PM (>15km)
     rideCreatedForPM: (ride, user) => ({
@@ -314,7 +370,7 @@ rideCreatedForAdminLongDistance: (ride, user) => ({
                         <p><strong>To:</strong> ${ride.destinationLocation.address}</p>
                     </div>
                     
-                    ${ride.rejectedBy.reason ? `
+                    ${ride.rejectedBy?.reason ? `
                         <div style="background: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                             <p style="color: #c62828; margin: 0;"><strong>Reason:</strong> ${ride.rejectedBy.reason}</p>
                         </div>

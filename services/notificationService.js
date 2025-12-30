@@ -14,25 +14,33 @@ const getProjectManager = async () => {
 };
 
 // Notify when ride is created
-// Notify when ride is created
-// Notify when ride is created
 const notifyRideCreated = async (ride, requester) => {
     try {
         const distance = ride.calculatedDistance;
         const admin = await getAdmin();
         
         if (distance > config.PM_APPROVAL_THRESHOLD_KM) {
-            // ✅ NEW: Notify BOTH PM and Admin for long distance rides
+            // ✅ LONG DISTANCE: Notify BOTH PM and Admin
             const pm = await getProjectManager();
             
-            // Notify Project Manager
+            // ✅ ADD THIS CHECK
+            if (!pm) {
+                console.error('❌ Project Manager user not found in database!');
+                console.log('💡 Make sure PM user exists with email:', config.HARDCODED_USERS.PROJECT_MANAGER.email);
+            }
+            
+            // Notify Project Manager (SMS + Email)
             if (pm) {
+                console.log(`📧 Sending PM notification to ${pm.email}...`); // ✅ ADD THIS
+                
                 const emailTemplate = emailTemplates.rideCreatedForPM(ride, requester);
                 await sendEmail({
                     to: pm.email,
                     subject: emailTemplate.subject,
                     html: emailTemplate.html
                 });
+                
+                console.log(`📱 Sending PM SMS to ${pm.phone}...`); // ✅ ADD THIS
                 
                 await sendSMS({
                     to: pm.phone,
@@ -48,20 +56,26 @@ const notifyRideCreated = async (ride, requester) => {
                     emailSent: true,
                     smsSent: true
                 });
+
+                console.log(`✅ PM notified for long distance ride #${ride.rideId}`);
             }
             
-            // ✅ ALSO notify Admin for long distance rides
+            // Notify Admin (SMS + Email)
             if (admin) {
+                console.log(`📧 Sending Admin notification to ${admin.email}...`); // ✅ ADD THIS
+                
                 const emailTemplate = emailTemplates.rideCreatedForAdminLongDistance(ride, requester);
                 await sendEmail({
                     to: admin.email,
-                    subject: `⚠️ Long Distance Ride #${ride.rideId} - Dual Approval Available`,
+                    subject: emailTemplate.subject,
                     html: emailTemplate.html
                 });
                 
+                console.log(`📱 Sending Admin SMS to ${admin.phone}...`); // ✅ ADD THIS
+                
                 await sendSMS({
                     to: admin.phone,
-                    message: `⚠️ RideManager: Long distance ride #${ride.rideId} (${distance}km) from ${requester.name}. You can approve with note OR wait for PM approval.`
+                    message: smsTemplates.rideCreatedForAdminLongDistance(ride, requester)
                 });
 
                 await Notification.create({
@@ -73,9 +87,11 @@ const notifyRideCreated = async (ride, requester) => {
                     emailSent: true,
                     smsSent: true
                 });
+
+                console.log(`✅ Admin notified for long distance ride #${ride.rideId}`);
             }
         } else {
-            // Notify Admin only for short distance rides
+            // ✅ REGULAR RIDE: Notify Admin only
             if (admin) {
                 const emailTemplate = emailTemplates.rideCreatedForAdmin(ride, requester);
                 await sendEmail({
@@ -98,22 +114,25 @@ const notifyRideCreated = async (ride, requester) => {
                     emailSent: true,
                     smsSent: true
                 });
+
+                console.log(`✅ Admin notified for regular ride #${ride.rideId}`);
             }
         }
 
         console.log('✅ Ride created notifications sent');
     } catch (error) {
         console.error('❌ Error sending ride created notifications:', error);
+        throw error; // ✅ ADD THIS to see full error
     }
 };
 
-// Notify when PM approves ride
+// ✅ 2. Notify when PM approves ride
 const notifyPMApproved = async (ride, pm) => {
     try {
         const requester = await User.findById(ride.requester);
         const admin = await getAdmin();
 
-        // Notify Admin
+        // Notify Admin (SMS + Email)
         if (admin) {
             const emailTemplate = emailTemplates.pmApprovedNotifyAdmin(ride, requester, pm);
             await sendEmail({
@@ -136,9 +155,11 @@ const notifyPMApproved = async (ride, pm) => {
                 emailSent: true,
                 smsSent: true
             });
+
+            console.log(`✅ Admin notified of PM approval for ride #${ride.rideId}`);
         }
 
-        // Notify User
+        // Notify User (SMS + Email)
         if (requester) {
             const emailTemplate = emailTemplates.pmApprovedNotifyUser(ride, requester);
             await sendEmail({
@@ -156,11 +177,13 @@ const notifyPMApproved = async (ride, pm) => {
                 recipient: requester._id,
                 type: 'ride_approved',
                 title: 'Ride Approved by PM',
-                message: `Your ride #${ride.rideId} has been approved. Driver assignment pending.`,
+                message: `Your ride #${ride.rideId} has been approved by Project Manager. Driver assignment pending.`,
                 ride: ride._id,
                 emailSent: true,
                 smsSent: true
             });
+
+            console.log(`✅ User notified of PM approval for ride #${ride.rideId}`);
         }
 
         console.log('✅ PM approval notifications sent');
@@ -169,11 +192,113 @@ const notifyPMApproved = async (ride, pm) => {
     }
 };
 
-// Notify when ride is assigned
-const notifyRideAssigned = async (ride, driver, vehicle) => {
+// ✅ 3. Notify when Admin approves long distance ride (with note)
+const notifyAdminApproved = async (ride, admin, approvalNote) => {
     try {
         const requester = await User.findById(ride.requester);
         const pm = await getProjectManager();
+
+        // Notify PM about Admin's approval with note (SMS + Email)
+        if (pm && ride.calculatedDistance > config.PM_APPROVAL_THRESHOLD_KM) {
+            const emailHTML = `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%); border-radius: 10px;">
+                    <div style="background: white; padding: 30px; border-radius: 8px;">
+                        <h1 style="color: #1565c0; margin-bottom: 20px;">Admin Approved Long Distance Ride</h1>
+                        
+                        <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #1976d2;">
+                            <p style="color: #0d47a1; margin: 0; font-weight: bold;">
+                                Admin ${admin.name} has approved this long-distance ride with the following note:
+                            </p>
+                        </div>
+                        
+                        <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
+                            <h4 style="color: #e65100; margin-top: 0;">Admin's Approval Note:</h4>
+                            <p style="color: #333; font-style: italic; margin: 0;">"${approvalNote}"</p>
+                        </div>
+                        
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                            <h3 style="color: #333; margin-top: 0;">Ride Details</h3>
+                            <p><strong>Ride ID:</strong> #${ride.rideId}</p>
+                            <p><strong>Requester:</strong> ${requester.name}</p>
+                            <p><strong>Distance:</strong> <span style="color: #d32f2f; font-weight: bold;">${ride.calculatedDistance} km</span></p>
+                            <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
+                            <p><strong>Time:</strong> ${ride.scheduledTime}</p>
+                        </div>
+                        
+                        <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <h4 style="color: #1a5f2a; margin-top: 0;">From</h4>
+                            <p style="margin: 0;">${ride.pickupLocation.address}</p>
+                        </div>
+                        
+                        <div style="background: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                            <h4 style="color: #c62828; margin-top: 0;">To</h4>
+                            <p style="margin: 0;">${ride.destinationLocation.address}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            await sendEmail({
+                to: pm.email,
+                subject: `Admin Approved Ride #${ride.rideId} (${ride.calculatedDistance}km) with Note`,
+                html: emailHTML
+            });
+            
+            const smsMessage = `RideManager: Admin approved ride #${ride.rideId} (${ride.calculatedDistance}km). Note: "${approvalNote.substring(0, 80)}${approvalNote.length > 80 ? '...' : ''}". Driver assignment in progress.`;
+            await sendSMS({
+                to: pm.phone,
+                message: smsMessage
+            });
+
+            console.log(`✅ PM notified of Admin approval with note for ride #${ride.rideId}`);
+        }
+
+        // Notify User (SMS + Email)
+        if (requester) {
+            const emailHTML = `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
+                    <div style="background: white; padding: 30px; border-radius: 8px;">
+                        <h1 style="color: #1a5f2a; margin-bottom: 20px;">Ride Request Approved</h1>
+                        
+                        <p>Dear ${requester.name},</p>
+                        <p>Your ride request has been approved by the Admin. A driver and vehicle will be assigned soon.</p>
+                        
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="color: #333; margin-top: 0;">Ride Details</h3>
+                            <p><strong>Ride ID:</strong> #${ride.rideId}</p>
+                            <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
+                            <p><strong>Time:</strong> ${ride.scheduledTime}</p>
+                            <p><strong>From:</strong> ${ride.pickupLocation.address}</p>
+                            <p><strong>To:</strong> ${ride.destinationLocation.address}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            await sendEmail({
+                to: requester.email,
+                subject: `Ride Request #${ride.rideId} - Approved`,
+                html: emailHTML
+            });
+            
+            await sendSMS({
+                to: requester.phone,
+                message: `RideManager: Your ride #${ride.rideId} has been approved by Admin. Driver will be assigned soon.`
+            });
+
+            console.log(`✅ User notified of Admin approval for ride #${ride.rideId}`);
+        }
+
+        console.log('✅ Admin approval notifications sent');
+    } catch (error) {
+        console.error('❌ Error sending admin approval notifications:', error);
+    }
+};
+
+// ✅ 4. Notify when ride is assigned
+const notifyRideAssigned = async (ride, driver, vehicle) => {
+    try {
+        const requester = await User.findById(ride.requester);
 
         // Notify User (Email + SMS)
         if (requester) {
@@ -198,20 +323,21 @@ const notifyRideAssigned = async (ride, driver, vehicle) => {
                 emailSent: true,
                 smsSent: true
             });
+
+            console.log(`✅ User notified of ride assignment for ride #${ride.rideId}`);
         }
 
-        // Notify Driver (SMS only)
-        await sendSMS({
-            to: driver.phone,
-            message: smsTemplates.rideAssignedToDriver(ride, requester, vehicle)
-        });
-
-        // Also send email to driver
+        // Notify Driver (Email + SMS)
         const driverEmailTemplate = emailTemplates.rideAssignedToDriver(ride, requester, driver, vehicle);
         await sendEmail({
             to: driver.email,
             subject: driverEmailTemplate.subject,
             html: driverEmailTemplate.html
+        });
+        
+        await sendSMS({
+            to: driver.phone,
+            message: smsTemplates.rideAssignedToDriver(ride, requester, vehicle)
         });
 
         await Notification.create({
@@ -224,32 +350,19 @@ const notifyRideAssigned = async (ride, driver, vehicle) => {
             smsSent: true
         });
 
-        // Notify PM (if it was a long distance ride)
-        if (ride.requiresPMApproval && pm) {
-            await sendEmail({
-                to: pm.email,
-                subject: `🚗 Ride #${ride.rideId} - Driver Assigned`,
-                html: `<p>Ride #${ride.rideId} has been assigned to driver ${driver.name} with vehicle ${vehicle.vehicleNumber}.</p>`
-            });
-            
-            await sendSMS({
-                to: pm.phone,
-                message: `RideManager: Ride #${ride.rideId} assigned to ${driver.name} (${vehicle.vehicleNumber}).`
-            });
-        }
-
+        console.log(`✅ Driver notified of ride assignment for ride #${ride.rideId}`);
         console.log('✅ Ride assignment notifications sent');
     } catch (error) {
         console.error('❌ Error sending ride assignment notifications:', error);
     }
 };
 
-// Notify when ride is reassigned
+// ✅ 5. Notify when ride is reassigned
 const notifyRideReassigned = async (ride, newDriver, newVehicle, oldDriver) => {
     try {
         const requester = await User.findById(ride.requester);
 
-        // Notify User
+        // Notify User (Email + SMS)
         if (requester) {
             const emailTemplate = emailTemplates.rideReassigned(ride, requester, newDriver, newVehicle, false);
             await sendEmail({
@@ -262,15 +375,26 @@ const notifyRideReassigned = async (ride, newDriver, newVehicle, oldDriver) => {
                 to: requester.phone,
                 message: smsTemplates.rideReassignedToUser(ride, newDriver, newVehicle)
             });
+
+            console.log(`✅ User notified of ride reassignment for ride #${ride.rideId}`);
         }
 
-        // Notify New Driver
+        // Notify New Driver (Email + SMS)
+        const newDriverEmailTemplate = emailTemplates.rideAssignedToDriver(ride, requester, newDriver, newVehicle);
+        await sendEmail({
+            to: newDriver.email,
+            subject: `New Ride Assignment #${ride.rideId} (Reassigned)`,
+            html: newDriverEmailTemplate.html
+        });
+        
         await sendSMS({
             to: newDriver.phone,
             message: smsTemplates.rideReassignedNewDriver(ride, requester, newVehicle)
         });
 
-        // Notify Old Driver
+        console.log(`✅ New driver notified of ride reassignment for ride #${ride.rideId}`);
+
+        // Notify Old Driver (Email + SMS)
         if (oldDriver) {
             const oldDriverEmailTemplate = emailTemplates.rideReassigned(ride, requester, newDriver, newVehicle, true);
             await sendEmail({
@@ -283,6 +407,8 @@ const notifyRideReassigned = async (ride, newDriver, newVehicle, oldDriver) => {
                 to: oldDriver.phone,
                 message: smsTemplates.rideReassignedOldDriver(ride)
             });
+
+            console.log(`✅ Old driver notified of ride reassignment for ride #${ride.rideId}`);
         }
 
         console.log('✅ Ride reassignment notifications sent');
@@ -291,7 +417,7 @@ const notifyRideReassigned = async (ride, newDriver, newVehicle, oldDriver) => {
     }
 };
 
-// Notify when ride is rejected
+// ✅ 6. Notify when ride is rejected
 const notifyRideRejected = async (ride, rejectedByUser) => {
     try {
         const requester = await User.findById(ride.requester);
@@ -318,6 +444,8 @@ const notifyRideRejected = async (ride, rejectedByUser) => {
                 emailSent: true,
                 smsSent: true
             });
+
+            console.log(`✅ User notified of ride rejection for ride #${ride.rideId}`);
         }
 
         console.log('✅ Ride rejection notifications sent');
@@ -326,7 +454,7 @@ const notifyRideRejected = async (ride, rejectedByUser) => {
     }
 };
 
-// Notify when ride is completed
+// ✅ 7. Notify when ride is completed
 const notifyRideCompleted = async (ride) => {
     try {
         const requester = await User.findById(ride.requester);
@@ -356,6 +484,8 @@ const notifyRideCompleted = async (ride) => {
                 emailSent: true,
                 smsSent: true
             });
+
+            console.log(`✅ User notified of ride completion for ride #${ride.rideId}`);
         }
 
         console.log('✅ Ride completion notifications sent');
@@ -364,91 +494,12 @@ const notifyRideCompleted = async (ride) => {
     }
 };
 
-
-// ✅ NEW: Notify PM when Admin approves with note (for long distance rides)
-const notifyPMAboutAdminApproval = async (ride, admin, note) => {
-    try {
-        const pm = await getProjectManager();
-        const requester = await User.findById(ride.requester);
-        
-        if (!pm) return;
-
-        // Email Template
-        const emailHTML = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%); border-radius: 10px;">
-                <div style="background: white; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: #1565c0; margin-bottom: 20px;">✅ Admin Approved Long Distance Ride</h1>
-                    
-                    <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #1976d2;">
-                        <p style="color: #0d47a1; margin: 0; font-weight: bold;">
-                            Admin ${admin.name} has approved this long-distance ride with the following note:
-                        </p>
-                    </div>
-                    
-                    <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff9800;">
-                        <h4 style="color: #e65100; margin-top: 0;">📝 Admin's Approval Note:</h4>
-                        <p style="color: #333; font-style: italic; margin: 0;">"${note}"</p>
-                    </div>
-                    
-                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                        <h3 style="color: #333; margin-top: 0;">Ride Details</h3>
-                        <p><strong>Ride ID:</strong> #${ride.rideId}</p>
-                        <p><strong>Requester:</strong> ${requester.name} (${requester.email})</p>
-                        <p><strong>Type:</strong> ${ride.rideType === 'one_way' ? 'One-Way' : 'Return Trip'}</p>
-                        <p><strong>Distance:</strong> <span style="color: #d32f2f; font-weight: bold;">${ride.calculatedDistance} km</span></p>
-                        <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
-                        <p><strong>Time:</strong> ${ride.scheduledTime}</p>
-                    </div>
-                    
-                    <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                        <h4 style="color: #1a5f2a; margin-top: 0;">📍 From</h4>
-                        <p style="margin: 0;">${ride.pickupLocation.address}</p>
-                    </div>
-                    
-                    <div style="background: #ffebee; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                        <h4 style="color: #c62828; margin-top: 0;">📍 To</h4>
-                        <p style="margin: 0;">${ride.destinationLocation.address}</p>
-                    </div>
-                    
-                    <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-top: 20px;">
-                        <p style="color: #2e7d32; margin: 0; font-weight: bold;">
-                            ✅ This ride has been approved and is now ready for driver & vehicle assignment.
-                        </p>
-                    </div>
-                    
-                    <p style="color: #666; font-size: 12px; margin-top: 30px; text-align: center;">
-                        This is an automated notification from RideManager System
-                    </p>
-                </div>
-            </div>
-        `;
-
-        // Send Email
-        await sendEmail({
-            to: pm.email,
-            subject: `✅ Admin Approved Ride #${ride.rideId} (${ride.calculatedDistance}km) with Note`,
-            html: emailHTML
-        });
-        
-        // Send SMS (shorter version)
-        const smsMessage = `✅ RideManager: Admin approved ride #${ride.rideId} (${ride.calculatedDistance}km). Reason: "${note.substring(0, 100)}${note.length > 100 ? '...' : ''}". Driver assignment in progress.`;
-        await sendSMS({
-            to: pm.phone,
-            message: smsMessage
-        });
-
-        console.log('✅ PM notified about admin approval with note');
-    } catch (error) {
-        console.error('❌ Error notifying PM about admin approval:', error);
-    }
-};
-
 module.exports = {
     notifyRideCreated,
     notifyPMApproved,
+    notifyAdminApproved, // NEW: For when admin approves with note
     notifyRideAssigned,
     notifyRideReassigned,
     notifyRideRejected,
-    notifyRideCompleted,
-    notifyPMAboutAdminApproval // NEW
+    notifyRideCompleted
 };
