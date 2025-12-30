@@ -54,7 +54,7 @@ module.exports = {
     HARDCODED_USERS: {
         PROJECT_MANAGER: {
             name: 'Amal Fernando',
-            email: 'jayasooriyashehan4@gmail.com',
+            email: 'kolithamalanbalachandra@gmail.com',
             phone: '0750569545',
             password: 'Amal#$#321',
             role: 'project_manager'
