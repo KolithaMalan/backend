@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
-  const uri = process.env.MONGODB_URI; // Must match Railway env variable
+  const uri = process.env.MONGODB_URI;
 
   if (!uri) {
     console.error('❌ MongoDB URI is missing! Please set MONGODB_URI in env variables.');
@@ -10,11 +10,7 @@ const connectDB = async () => {
   }
 
   try {
-    const conn = await mongoose.connect(uri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-
+    const conn = await mongoose.connect(uri); // ✅ No extra options
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error(`❌ MongoDB Connection Error: ${error.message}`);
