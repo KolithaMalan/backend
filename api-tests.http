@@ -1,0 +1,401 @@
+### ===== RIDEMANAGER API TESTS =====
+### Use this file with REST Client extension in VS Code
+
+@baseUrl = http://localhost:5000/api
+@token = YOUR_JWT_TOKEN_HERE
+
+
+### ========== HEALTH CHECK ==========
+
+### Health Check
+GET {{baseUrl}}/health
+
+
+### ========== AUTHENTICATION ==========
+
+### Register New User
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "phone": "0771234567",
+    "password": "Test@123#$"
+}
+
+### Login as User
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "john.doe@example.com",
+    "password": "Test@123#$"
+}
+
+### Login as Admin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "koliyxmalan121@gmail.com",
+    "password": "Nithya123@#"
+}
+
+### Login as Project Manager
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "jayasooriyashehan4@gmail.com",
+    "password": "Amal#$#321"
+}
+
+### Login as Driver
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "driver1@ridemanager.com",
+    "password": "Driver1@#"
+}
+
+### Get Current User Profile
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### Logout
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{token}}
+
+
+### ========== RIDES ==========
+
+### Create Ride Request (One-Way, < 15km)
+POST {{baseUrl}}/rides
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "rideType": "one_way",
+    "pickupLocation": {
+        "address": "Colombo Fort, Colombo, Sri Lanka",
+        "coordinates": {
+            "lat": 6.9344,
+            "lng": 79.8428
+        }
+    },
+    "destinationLocation": {
+        "address": "Kollupitiya, Colombo, Sri Lanka",
+        "coordinates": {
+            "lat": 6.9108,
+            "lng": 79.8478
+        }
+    },
+    "scheduledDate": "2025-12-20",
+    "scheduledTime": "09:30"
+}
+
+### Create Ride Request (Return Trip, > 15km - Goes to PM)
+POST {{baseUrl}}/rides
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "rideType": "return",
+    "pickupLocation": {
+        "address": "Colombo Fort, Colombo, Sri Lanka",
+        "coordinates": {
+            "lat": 6.9344,
+            "lng": 79.8428
+        }
+    },
+    "destinationLocation": {
+        "address": "Negombo, Sri Lanka",
+        "coordinates": {
+            "lat": 7.2094,
+            "lng": 79.8358
+        }
+    },
+    "scheduledDate": "2025-12-21",
+    "scheduledTime": "10:00"
+}
+
+### Get All My Rides
+GET {{baseUrl}}/rides
+Authorization: Bearer {{token}}
+
+### Get My Ride Statistics
+GET {{baseUrl}}/rides/my-stats
+Authorization: Bearer {{token}}
+
+### Get Single Ride
+GET {{baseUrl}}/rides/RIDE_ID_HERE
+Authorization: Bearer {{token}}
+
+### Cancel Ride (Before Approval)
+PUT {{baseUrl}}/rides/RIDE_ID_HERE/cancel
+Authorization: Bearer {{token}}
+
+
+### ========== PM ACTIONS ==========
+
+### Get Rides Awaiting PM Approval (PM Only)
+GET {{baseUrl}}/rides/awaiting-pm
+Authorization: Bearer {{token}}
+
+### PM Approve Ride
+PUT {{baseUrl}}/rides/RIDE_ID_HERE/pm-approve
+Authorization: Bearer {{token}}
+
+### PM Reject Ride
+PUT {{baseUrl}}/rides/RIDE_ID_HERE/pm-reject
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "reason": "Distance too far for this date"
+}
+
+
+### ========== ADMIN ACTIONS ==========
+
+### Get Rides Awaiting Admin Approval (Admin Only)
+GET {{baseUrl}}/rides/awaiting-admin
+Authorization: Bearer {{token}}
+
+### Get Rides Ready for Assignment (Admin Only)
+GET {{baseUrl}}/rides/ready-for-assignment
+Authorization: Bearer {{token}}
+
+### Admin Approve Ride
+PUT {{baseUrl}}/rides/RIDE_ID_HERE/admin-approve
+Authorization: Bearer {{token}}
+
+### Admin Reject Ride
+PUT {{baseUrl}}/rides/RIDE_ID_HERE/admin-reject
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "reason": "No vehicles available on this date"
+}
+
+### Get Available Drivers for Date/Time
+GET {{baseUrl}}/rides/available-drivers?date=2025-12-20&time=09:30
+Authorization: Bearer {{token}}
+
+### Get Available Vehicles for Date/Time
+GET {{baseUrl}}/rides/available-vehicles?date=2025-12-20&time=09:30
+Authorization: Bearer {{token}}
+
+### Assign Driver and Vehicle
+PUT {{baseUrl}}/rides/RIDE_ID_HERE/assign
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "driverId": "DRIVER_ID_HERE",
+    "vehicleId": "VEHICLE_ID_HERE"
+}
+
+### Reassign Driver and Vehicle
+PUT {{baseUrl}}/rides/RIDE_ID_HERE/reassign
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "driverId": "NEW_DRIVER_ID_HERE",
+    "vehicleId": "NEW_VEHICLE_ID_HERE"
+}
+
+
+### ========== DRIVER ACTIONS ==========
+
+### Get Assigned Rides (Driver Only)
+GET {{baseUrl}}/rides/driver/assigned
+Authorization: Bearer {{token}}
+
+### Get Daily Rides (Driver Only)
+GET {{baseUrl}}/rides/driver/daily
+Authorization: Bearer {{token}}
+
+### Start Ride
+PUT {{baseUrl}}/rides/RIDE_ID_HERE/start
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "startMileage": 45230.5
+}
+
+### Complete Ride
+PUT {{baseUrl}}/rides/RIDE_ID_HERE/complete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "endMileage": 45245.8
+}
+
+
+### ========== USERS (Admin Only) ==========
+
+### Get All Users
+GET {{baseUrl}}/users
+Authorization: Bearer {{token}}
+
+### Get User Counts
+GET {{baseUrl}}/users/counts
+Authorization: Bearer {{token}}
+
+### Get All Drivers
+GET {{baseUrl}}/users/drivers
+Authorization: Bearer {{token}}
+
+### Get Available Drivers
+GET {{baseUrl}}/users/drivers/available
+Authorization: Bearer {{token}}
+
+### Create New User (Driver)
+POST {{baseUrl}}/users
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "name": "Driver 5",
+    "email": "driver5@ridemanager.com",
+    "phone": "0775555555",
+    "password": "Driver5@#",
+    "role": "driver"
+}
+
+### Get Single User
+GET {{baseUrl}}/users/USER_ID_HERE
+Authorization: Bearer {{token}}
+
+### Update User
+PUT {{baseUrl}}/users/USER_ID_HERE
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "name": "Updated Name",
+    "phone": "0779999999"
+}
+
+### Get Driver Stats
+GET {{baseUrl}}/users/drivers/DRIVER_ID_HERE/stats
+Authorization: Bearer {{token}}
+
+
+### ========== VEHICLES (Admin Only) ==========
+
+### Get All Vehicles
+GET {{baseUrl}}/vehicles
+Authorization: Bearer {{token}}
+
+### Get Vehicle Counts
+GET {{baseUrl}}/vehicles/counts
+Authorization: Bearer {{token}}
+
+### Get Available Vehicles
+GET {{baseUrl}}/vehicles/available
+Authorization: Bearer {{token}}
+
+### Get Vehicle Mileage Summary
+GET {{baseUrl}}/vehicles/mileage-summary
+Authorization: Bearer {{token}}
+
+### Create New Vehicle
+POST {{baseUrl}}/vehicles
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "vehicleNumber": "AB-1234",
+    "type": "Van"
+}
+
+### Get Single Vehicle
+GET {{baseUrl}}/vehicles/VEHICLE_ID_HERE
+Authorization: Bearer {{token}}
+
+### Get Vehicle Stats
+GET {{baseUrl}}/vehicles/VEHICLE_ID_HERE/stats
+Authorization: Bearer {{token}}
+
+### Update Vehicle
+PUT {{baseUrl}}/vehicles/VEHICLE_ID_HERE
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "type": "SUV"
+}
+
+### Set Vehicle to Maintenance
+PUT {{baseUrl}}/vehicles/VEHICLE_ID_HERE/maintenance
+Authorization: Bearer {{token}}
+
+
+### ========== REPORTS (Admin & PM) ==========
+
+### Get Dashboard Statistics
+GET {{baseUrl}}/reports/dashboard-stats
+Authorization: Bearer {{token}}
+
+### Get Monthly Ride Report
+GET {{baseUrl}}/reports/monthly-rides?month=12&year=2025
+Authorization: Bearer {{token}}
+
+### Get Driver Performance Report
+GET {{baseUrl}}/reports/driver-performance?month=12&year=2025
+Authorization: Bearer {{token}}
+
+### Get Vehicle Usage Report
+GET {{baseUrl}}/reports/vehicle-usage?month=12&year=2025
+Authorization: Bearer {{token}}
+
+### Get Ride History
+GET {{baseUrl}}/reports/ride-history?startDate=2025-12-01&endDate=2025-12-31
+Authorization: Bearer {{token}}
+
+### Export Rides Report
+GET {{baseUrl}}/reports/export/rides?month=12&year=2025
+Authorization: Bearer {{token}}
+
+### Export Driver Report
+GET {{baseUrl}}/reports/export/drivers?month=12&year=2025
+Authorization: Bearer {{token}}
+
+### Export Vehicle Report
+GET {{baseUrl}}/reports/export/vehicles?month=12&year=2025
+Authorization: Bearer {{token}}
+
+### Get My Ride History (All Users)
+GET {{baseUrl}}/reports/my-history
+Authorization: Bearer {{token}}
+
+
+### ========== NOTIFICATIONS ==========
+
+### Get My Notifications
+GET {{baseUrl}}/notifications
+Authorization: Bearer {{token}}
+
+### Get Unread Count
+GET {{baseUrl}}/notifications/unread-count
+Authorization: Bearer {{token}}
+
+### Mark Notification as Read
+PUT {{baseUrl}}/notifications/NOTIFICATION_ID_HERE/read
+Authorization: Bearer {{token}}
+
+### Mark All as Read
+PUT {{baseUrl}}/notifications/read-all
+Authorization: Bearer {{token}}
+
+### Delete Notification
+DELETE {{baseUrl}}/notifications/NOTIFICATION_ID_HERE
+Authorization: Bearer {{token}}
