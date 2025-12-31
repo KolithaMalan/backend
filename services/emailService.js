@@ -1,42 +1,27 @@
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
-// Create transporter
-// Create transporter with timeout
-// Create transporter with proper timeout settings
-const createTransporter = () => {
-    const config = {
-        host: process.env.EMAIL_HOST,
-        port: parseInt(process.env.EMAIL_PORT) || 587,
-        secure: false, // true for 465, false for other ports
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-        },
-        connectionTimeout: 5000,  // 5 seconds
-        greetingTimeout: 5000,    // 5 seconds
-        socketTimeout: 5000,      // 5 seconds
-        pool: true,               // Use pooled connections
-        maxConnections: 5,        // Max simultaneous connections
-        maxMessages: 100          // Max messages per connection
-    };
-
-    console.log('📧 Email transporter config:', {
-        host: config.host,
-        port: config.port,
-        user: config.auth.user?.substring(0, 10) + '...',
-        from: process.env.EMAIL_FROM
-    });
-
-    return nodemailer.createTransport(config);
+// Initialize SendGrid with API key
+const initializeSendGrid = () => {
+    if (process.env.SENDGRID_API_KEY || process.env.EMAIL_PASS) {
+        const apiKey = process.env.SENDGRID_API_KEY || process.env.EMAIL_PASS;
+        sgMail.setApiKey(apiKey);
+        console.log('✅ SendGrid initialized with API key');
+        return true;
+    } else {
+        console.warn('⚠️ SendGrid API key not found');
+        return false;
+    }
 };
 
 // Check if email is properly configured
 const isEmailConfigured = () => {
-    const required = ['EMAIL_HOST', 'EMAIL_USER', 'EMAIL_PASS'];
-    const missing = required.filter(key => !process.env[key]);
+    if (!process.env.SENDGRID_API_KEY && !process.env.EMAIL_PASS) {
+        console.warn('⚠️ Email not configured. Missing SENDGRID_API_KEY or EMAIL_PASS');
+        return false;
+    }
     
-    if (missing.length > 0) {
-        console.warn(`⚠️ Email not configured. Missing: ${missing.join(', ')}`);
+    if (!process.env.EMAIL_FROM) {
+        console.warn('⚠️ EMAIL_FROM not configured');
         return false;
     }
     
@@ -48,7 +33,7 @@ const isEmailConfigured = () => {
     return true;
 };
 
-// Send email with timeout and better error handling
+// Send email using SendGrid Web API
 const sendEmail = async ({ to, subject, html, text }) => {
     // Check configuration first
     if (!isEmailConfigured()) {
@@ -57,48 +42,53 @@ const sendEmail = async ({ to, subject, html, text }) => {
     }
 
     try {
-        const transporter = createTransporter();
+        // Initialize SendGrid
+        initializeSendGrid();
 
-        const mailOptions = {
-            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        const msg = {
             to,
+            from: {
+                email: process.env.EMAIL_FROM,
+                name: 'RideManager'
+            },
             subject,
             html,
             text: text || subject
         };
 
-        console.log(`📧 Attempting to send email to ${to}...`);
+        console.log(`📧 Attempting to send email to ${to} via SendGrid API...`);
 
-        // Send with race condition timeout
-        const sendPromise = transporter.sendMail(mailOptions);
+        // Send with timeout
+        const sendPromise = sgMail.send(msg);
         const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Email send timeout after 10s')), 10000)
         );
 
-        const info = await Promise.race([sendPromise, timeoutPromise]);
+        const result = await Promise.race([sendPromise, timeoutPromise]);
         
         console.log(`✅ Email sent successfully to ${to}`);
-        console.log(`   Message ID: ${info.messageId}`);
-        console.log(`   Response: ${info.response}`);
+        console.log(`   Status: ${result[0].statusCode}`);
         
         return { 
             success: true, 
-            messageId: info.messageId,
-            response: info.response 
+            statusCode: result[0].statusCode,
+            response: result[0].body 
         };
     } catch (error) {
         console.error(`❌ Email failed to ${to}:`);
         console.error(`   Error: ${error.message}`);
         
-        // Log more details for debugging
-        if (error.code) console.error(`   Code: ${error.code}`);
-        if (error.command) console.error(`   Command: ${error.command}`);
+        // Log SendGrid specific errors
+        if (error.response) {
+            console.error(`   Status: ${error.response.statusCode}`);
+            console.error(`   Body:`, error.response.body);
+        }
         
         return { 
             success: false, 
             error: error.message,
-            code: error.code,
-            command: error.command
+            statusCode: error.response?.statusCode,
+            body: error.response?.body
         };
     }
 };
@@ -476,4 +466,4 @@ const emailTemplates = {
     })
 };
 
-module.exports = { sendEmail, emailTemplates };
+module.exports = { sendEmail, emailTemplates, isEmailConfigured };

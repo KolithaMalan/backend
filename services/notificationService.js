@@ -3,7 +3,7 @@ const { sendSMS, smsTemplates } = require('./smsService');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const config = require('../config/config');
-
+const { sendEmail, emailTemplates, isEmailConfigured } = require('./emailService');
 // Get hardcoded users
 const getAdmin = async () => {
     return await User.findOne({ email: config.HARDCODED_USERS.ADMIN.email });
