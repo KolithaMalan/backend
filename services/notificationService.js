@@ -1,4 +1,3 @@
-const { sendEmail, emailTemplates } = require('./emailService');
 const { sendSMS, smsTemplates } = require('./smsService');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
