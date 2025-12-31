@@ -2,30 +2,61 @@ const nodemailer = require('nodemailer');
 
 // Create transporter
 // Create transporter with timeout
+// Create transporter with proper timeout settings
 const createTransporter = () => {
-    return nodemailer.createTransport({
+    const config = {
         host: process.env.EMAIL_HOST,
-        port: process.env.EMAIL_PORT,
+        port: parseInt(process.env.EMAIL_PORT) || 587,
         secure: false, // true for 465, false for other ports
         auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS
         },
-        connectionTimeout: 10000, // ✅ 10 second timeout
-        greetingTimeout: 10000,   // ✅ 10 second timeout
-        socketTimeout: 10000       // ✅ 10 second timeout
+        connectionTimeout: 5000,  // 5 seconds
+        greetingTimeout: 5000,    // 5 seconds
+        socketTimeout: 5000,      // 5 seconds
+        pool: true,               // Use pooled connections
+        maxConnections: 5,        // Max simultaneous connections
+        maxMessages: 100          // Max messages per connection
+    };
+
+    console.log('📧 Email transporter config:', {
+        host: config.host,
+        port: config.port,
+        user: config.auth.user?.substring(0, 10) + '...',
+        from: process.env.EMAIL_FROM
     });
+
+    return nodemailer.createTransport(config);
 };
 
-// Send email with better error handling
-const sendEmail = async ({ to, subject, html, text }) => {
-    try {
-        // ✅ Check if email is configured
-        if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.warn('⚠️ Email not configured - skipping email to:', to);
-            return { success: false, error: 'Email not configured' };
-        }
+// Check if email is properly configured
+const isEmailConfigured = () => {
+    const required = ['EMAIL_HOST', 'EMAIL_USER', 'EMAIL_PASS'];
+    const missing = required.filter(key => !process.env[key]);
+    
+    if (missing.length > 0) {
+        console.warn(`⚠️ Email not configured. Missing: ${missing.join(', ')}`);
+        return false;
+    }
+    
+    if (process.env.DISABLE_EMAIL === 'true') {
+        console.log('⚠️ Email is disabled via DISABLE_EMAIL env variable');
+        return false;
+    }
+    
+    return true;
+};
 
+// Send email with timeout and better error handling
+const sendEmail = async ({ to, subject, html, text }) => {
+    // Check configuration first
+    if (!isEmailConfigured()) {
+        console.log(`⚠️ Email skipped (not configured) - would send to ${to}`);
+        return { success: false, error: 'Email not configured', skipped: true };
+    }
+
+    try {
         const transporter = createTransporter();
 
         const mailOptions = {
@@ -36,26 +67,45 @@ const sendEmail = async ({ to, subject, html, text }) => {
             text: text || subject
         };
 
-        // ✅ Add timeout promise
+        console.log(`📧 Attempting to send email to ${to}...`);
+
+        // Send with race condition timeout
         const sendPromise = transporter.sendMail(mailOptions);
         const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Email send timeout')), 15000)
+            setTimeout(() => reject(new Error('Email send timeout after 10s')), 10000)
         );
 
         const info = await Promise.race([sendPromise, timeoutPromise]);
         
-        console.log(`✅ Email sent to ${to}: ${info.messageId}`);
-        return { success: true, messageId: info.messageId };
+        console.log(`✅ Email sent successfully to ${to}`);
+        console.log(`   Message ID: ${info.messageId}`);
+        console.log(`   Response: ${info.response}`);
+        
+        return { 
+            success: true, 
+            messageId: info.messageId,
+            response: info.response 
+        };
     } catch (error) {
-        console.error(`❌ Email error to ${to}:`, error.message);
-        return { success: false, error: error.message };
+        console.error(`❌ Email failed to ${to}:`);
+        console.error(`   Error: ${error.message}`);
+        
+        // Log more details for debugging
+        if (error.code) console.error(`   Code: ${error.code}`);
+        if (error.command) console.error(`   Command: ${error.command}`);
+        
+        return { 
+            success: false, 
+            error: error.message,
+            code: error.code,
+            command: error.command
+        };
     }
 };
 
 // Email Templates
 const emailTemplates = {
-    
-    // ✅ NEW: Ride created notification to Admin (SHORT distance - ≤15km)
+    // ✅ Ride created notification to Admin (SHORT distance - ≤15km)
     rideCreatedForAdmin: (ride, user) => ({
         subject: `🚗 New Ride Request #${ride.rideId} - Approval Required`,
         html: `
@@ -98,7 +148,8 @@ const emailTemplates = {
                     ` : ''}
                     
                     <div style="text-align: center; margin-top: 30px;">
-                        <a href="${process.env.ADMIN_DASHBOARD_URL}" style="background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                        <a href="${process.env.ADMIN_DASHBOARD_URL || 'https://your-app.vercel.app'}/admin/rides" 
+                           style="background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
                             Review & Assign Driver
                         </a>
                     </div>
@@ -146,7 +197,8 @@ const emailTemplates = {
                     </div>
                     
                     <div style="text-align: center; margin-top: 30px;">
-                        <a href="${process.env.ADMIN_DASHBOARD_URL}" style="background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                        <a href="${process.env.ADMIN_DASHBOARD_URL || 'https://your-app.vercel.app'}/admin/rides" 
+                           style="background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
                             Go to Dashboard
                         </a>
                     </div>
@@ -194,7 +246,8 @@ const emailTemplates = {
                     </div>
                     
                     <div style="text-align: center; margin-top: 30px;">
-                        <a href="${process.env.ADMIN_DASHBOARD_URL}" style="background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                        <a href="${process.env.ADMIN_DASHBOARD_URL || 'https://your-app.vercel.app'}/pm/rides" 
+                           style="background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
                             Review & Approve
                         </a>
                     </div>

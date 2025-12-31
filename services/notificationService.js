@@ -20,120 +20,140 @@ const notifyRideCreated = async (ride, requester) => {
         const admin = await getAdmin();
         
         if (distance > config.PM_APPROVAL_THRESHOLD_KM) {
-            // ✅ LONG DISTANCE: Notify BOTH PM and Admin
+            // Long distance: Notify BOTH PM and Admin
             const pm = await getProjectManager();
             
             if (!pm) {
-                console.error('❌ Project Manager user not found in database!');
+                console.error('❌ Project Manager user not found!');
             }
             
-            // ✅ Use Promise.allSettled instead of await (non-blocking)
-            const pmNotifications = [];
-            const adminNotifications = [];
-            
-            // Notify Project Manager (SMS + Email)
+            // Notify Project Manager
             if (pm) {
                 console.log(`📧 Sending PM notification to ${pm.email}...`);
                 
-                const emailTemplate = emailTemplates.rideCreatedForPM(ride, requester);
-                pmNotifications.push(
+                // Email (fire and forget - don't await)
+                if (isEmailConfigured()) {
+                    const emailTemplate = emailTemplates.rideCreatedForPM(ride, requester);
                     sendEmail({
                         to: pm.email,
                         subject: emailTemplate.subject,
                         html: emailTemplate.html
-                    }).catch(err => console.error('PM email failed:', err.message))
-                );
+                    }).then(result => {
+                        if (result.success) {
+                            console.log(`✅ PM email sent successfully`);
+                        } else {
+                            console.error(`❌ PM email failed:`, result.error);
+                        }
+                    });
+                }
                 
+                // SMS (fire and forget)
                 console.log(`📱 Sending PM SMS to ${pm.phone}...`);
-                
-                pmNotifications.push(
-                    sendSMS({
-                        to: pm.phone,
-                        message: smsTemplates.rideCreatedForPM(ride, requester)
-                    }).catch(err => console.error('PM SMS failed:', err.message))
-                );
+                sendSMS({
+                    to: pm.phone,
+                    message: smsTemplates.rideCreatedForPM(ride, requester)
+                }).then(result => {
+                    if (result.success) {
+                        console.log(`✅ PM SMS sent successfully`);
+                    } else {
+                        console.error(`❌ PM SMS failed:`, result.error);
+                    }
+                });
 
-                pmNotifications.push(
-                    Notification.create({
-                        recipient: pm._id,
-                        type: 'ride_created',
-                        title: 'Long Distance Ride Request',
-                        message: `New ride request #${ride.rideId} (${distance}km) requires your approval`,
-                        ride: ride._id,
-                        emailSent: true,
-                        smsSent: true
-                    }).catch(err => console.error('PM notification DB failed:', err.message))
-                );
+                // In-app notification
+                await Notification.create({
+                    recipient: pm._id,
+                    type: 'ride_created',
+                    title: 'Long Distance Ride Request',
+                    message: `New ride request #${ride.rideId} (${distance}km) requires your approval`,
+                    ride: ride._id,
+                    emailSent: isEmailConfigured(),
+                    smsSent: true
+                });
+
+                console.log(`✅ PM notified for long distance ride #${ride.rideId}`);
             }
             
-            // Notify Admin (SMS + Email)
+            // Notify Admin
             if (admin) {
                 console.log(`📧 Sending Admin notification to ${admin.email}...`);
                 
-                const emailTemplate = emailTemplates.rideCreatedForAdminLongDistance(ride, requester);
-                adminNotifications.push(
+                // Email (fire and forget)
+                if (isEmailConfigured()) {
+                    const emailTemplate = emailTemplates.rideCreatedForAdminLongDistance(ride, requester);
                     sendEmail({
                         to: admin.email,
                         subject: emailTemplate.subject,
                         html: emailTemplate.html
-                    }).catch(err => console.error('Admin email failed:', err.message))
-                );
+                    }).then(result => {
+                        if (result.success) {
+                            console.log(`✅ Admin email sent successfully`);
+                        } else {
+                            console.error(`❌ Admin email failed:`, result.error);
+                        }
+                    });
+                }
                 
+                // SMS (fire and forget)
                 console.log(`📱 Sending Admin SMS to ${admin.phone}...`);
-                
-                adminNotifications.push(
-                    sendSMS({
-                        to: admin.phone,
-                        message: smsTemplates.rideCreatedForAdminLongDistance(ride, requester)
-                    }).catch(err => console.error('Admin SMS failed:', err.message))
-                );
+                sendSMS({
+                    to: admin.phone,
+                    message: smsTemplates.rideCreatedForAdminLongDistance(ride, requester)
+                }).then(result => {
+                    if (result.success) {
+                        console.log(`✅ Admin SMS sent successfully`);
+                    } else {
+                        console.error(`❌ Admin SMS failed:`, result.error);
+                    }
+                });
 
-                adminNotifications.push(
-                    Notification.create({
-                        recipient: admin._id,
-                        type: 'ride_created',
-                        title: 'Long Distance Ride - Dual Approval',
-                        message: `Ride #${ride.rideId} (${distance}km) can be approved by you (with note) or PM.`,
-                        ride: ride._id,
-                        emailSent: true,
-                        smsSent: true
-                    }).catch(err => console.error('Admin notification DB failed:', err.message))
-                );
+                // In-app notification
+                await Notification.create({
+                    recipient: admin._id,
+                    type: 'ride_created',
+                    title: 'Long Distance Ride - Dual Approval',
+                    message: `Ride #${ride.rideId} (${distance}km) can be approved by you (with note) or PM.`,
+                    ride: ride._id,
+                    emailSent: isEmailConfigured(),
+                    smsSent: true
+                });
+
+                console.log(`✅ Admin notified for long distance ride #${ride.rideId}`);
             }
-
-            // ✅ Wait for all notifications to complete (but don't fail if some fail)
-            await Promise.allSettled([...pmNotifications, ...adminNotifications]);
-            
-            console.log(`✅ PM notified for long distance ride #${ride.rideId}`);
-            console.log(`✅ Admin notified for long distance ride #${ride.rideId}`);
             
         } else {
-            // ✅ REGULAR RIDE: Notify Admin only
+            // Regular ride - Admin only
             if (admin) {
-                const emailTemplate = emailTemplates.rideCreatedForAdmin(ride, requester);
-                
-                await Promise.allSettled([
+                // Email
+                if (isEmailConfigured()) {
+                    const emailTemplate = emailTemplates.rideCreatedForAdmin(ride, requester);
                     sendEmail({
                         to: admin.email,
                         subject: emailTemplate.subject,
                         html: emailTemplate.html
-                    }).catch(err => console.error('Admin email failed:', err.message)),
-                    
-                    sendSMS({
-                        to: admin.phone,
-                        message: smsTemplates.rideCreatedForAdmin(ride, requester)
-                    }).catch(err => console.error('Admin SMS failed:', err.message)),
+                    }).then(result => {
+                        if (result.success) {
+                            console.log(`✅ Admin email sent successfully`);
+                        }
+                    });
+                }
+                
+                // SMS
+                sendSMS({
+                    to: admin.phone,
+                    message: smsTemplates.rideCreatedForAdmin(ride, requester)
+                });
 
-                    Notification.create({
-                        recipient: admin._id,
-                        type: 'ride_created',
-                        title: 'New Ride Request',
-                        message: `New ride request #${ride.rideId} (${distance}km) awaiting approval`,
-                        ride: ride._id,
-                        emailSent: true,
-                        smsSent: true
-                    }).catch(err => console.error('Admin notification DB failed:', err.message))
-                ]);
+                // In-app notification
+                await Notification.create({
+                    recipient: admin._id,
+                    type: 'ride_created',
+                    title: 'New Ride Request',
+                    message: `New ride request #${ride.rideId} (${distance}km) awaiting approval`,
+                    ride: ride._id,
+                    emailSent: isEmailConfigured(),
+                    smsSent: true
+                });
 
                 console.log(`✅ Admin notified for regular ride #${ride.rideId}`);
             }
@@ -142,9 +162,9 @@ const notifyRideCreated = async (ride, requester) => {
         console.log('✅ Ride created notifications sent');
     } catch (error) {
         console.error('❌ Error sending ride created notifications:', error);
-        // ✅ Don't throw - let the ride creation succeed even if notifications fail
     }
 };
+
 
 // ✅ 2. Notify when PM approves ride
 const notifyPMApproved = async (ride, pm) => {
