@@ -15,8 +15,6 @@ const vehicleRoutes = require('./routes/vehicleRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 
-const testRoutes = require('./routes/test');
-app.use('/api/test', testRoutes);
 
 const app = express();
 
