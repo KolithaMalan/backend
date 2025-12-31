@@ -1,32 +1,49 @@
 const nodemailer = require('nodemailer');
 
 // Create transporter
+// Create transporter with timeout
 const createTransporter = () => {
     return nodemailer.createTransport({
         host: process.env.EMAIL_HOST,
         port: process.env.EMAIL_PORT,
-        secure: false,
+        secure: false, // true for 465, false for other ports
         auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_PASS
-        }
+        },
+        connectionTimeout: 10000, // ✅ 10 second timeout
+        greetingTimeout: 10000,   // ✅ 10 second timeout
+        socketTimeout: 10000       // ✅ 10 second timeout
     });
 };
 
-// Send email
+// Send email with better error handling
 const sendEmail = async ({ to, subject, html, text }) => {
     try {
+        // ✅ Check if email is configured
+        if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            console.warn('⚠️ Email not configured - skipping email to:', to);
+            return { success: false, error: 'Email not configured' };
+        }
+
         const transporter = createTransporter();
 
         const mailOptions = {
-            from: process.env.EMAIL_FROM,
+            from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
             to,
             subject,
             html,
-            text
+            text: text || subject
         };
 
-        const info = await transporter.sendMail(mailOptions);
+        // ✅ Add timeout promise
+        const sendPromise = transporter.sendMail(mailOptions);
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Email send timeout')), 15000)
+        );
+
+        const info = await Promise.race([sendPromise, timeoutPromise]);
+        
         console.log(`✅ Email sent to ${to}: ${info.messageId}`);
         return { success: true, messageId: info.messageId };
     } catch (error) {

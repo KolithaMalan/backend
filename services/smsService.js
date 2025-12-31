@@ -30,8 +30,15 @@ const formatPhoneNumber = (phone) => {
 // Send SMS using Notify.lk
 const sendSMS = async ({ to, message }) => {
     try {
+        // ✅ Check if SMS is configured
+        if (!NOTIFY_CONFIG.userId || !NOTIFY_CONFIG.apiKey) {
+            console.warn('⚠️ SMS not configured - skipping SMS to:', to);
+            return { success: false, error: 'SMS not configured' };
+        }
+
         const formattedNumber = formatPhoneNumber(to);
         
+        // ✅ Add timeout to axios
         const response = await axios.post(NOTIFY_CONFIG.baseUrl, null, {
             params: {
                 user_id: NOTIFY_CONFIG.userId,
@@ -39,7 +46,8 @@ const sendSMS = async ({ to, message }) => {
                 sender_id: NOTIFY_CONFIG.senderId,
                 to: formattedNumber,
                 message: message
-            }
+            },
+            timeout: 10000 // ✅ 10 second timeout
         });
 
         if (response.data.status === 'success' || response.data.status === '1') {
@@ -57,13 +65,25 @@ const sendSMS = async ({ to, message }) => {
             };
         }
     } catch (error) {
-        console.error(`❌ SMS error to ${to}:`, error.message);
+        // ✅ Better error logging
+        if (error.response) {
+            console.error(`❌ SMS API error to ${to}:`, {
+                status: error.response.status,
+                data: error.response.data
+            });
+        } else if (error.request) {
+            console.error(`❌ SMS network error to ${to}:`, error.message);
+        } else {
+            console.error(`❌ SMS error to ${to}:`, error.message);
+        }
+        
         return { 
             success: false, 
             error: error.response?.data?.message || error.message 
         };
     }
 };
+
 
 // Check SMS Balance
 const checkBalance = async () => {
