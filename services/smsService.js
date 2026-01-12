@@ -5,7 +5,7 @@ const NOTIFY_CONFIG = {
     baseUrl: 'https://app.notify.lk/api/v1/send',
     userId: process.env.NOTIFY_USER_ID,
     apiKey: process.env.NOTIFY_API_KEY,
-    senderId: process.env.NOTIFY_SENDER_ID || 'NotifyDEMO'
+    senderId: process.env.NOTIFY_SENDER_ID || 'SobaRides'
 };
 
 // Format phone number for Sri Lanka
