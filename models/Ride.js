@@ -17,6 +17,14 @@ const rideSchema = new mongoose.Schema({
     calculatedDistance: Number,
     scheduledDate: Date,
     scheduledTime: String,
+    
+    // ✅ NEW: Required Vehicle Type
+    requiredVehicleType: {
+        type: String,
+        enum: ['van', 'cab', 'land_master'],
+        required: true
+    },
+    
     status: {
         type: String,
         default: 'pending'
@@ -38,7 +46,7 @@ const rideSchema = new mongoose.Schema({
         admin: {
             user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
             approvedAt: { type: Date, default: null },
-            note: { type: String, default: null } // ✅ NEW: Admin approval note
+            note: { type: String, default: null }
         }
     },
     rejectedBy: {
