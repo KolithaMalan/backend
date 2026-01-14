@@ -11,7 +11,7 @@ const vehicleSchema = new mongoose.Schema({
     type: {
         type: String,
         required: [true, 'Vehicle type is required'],
-        enum: ['Car', 'Van', 'Bus', 'SUV','Cab','Crew Cab'],
+        enum: ['Car', 'Van','Cab','Crew Cab'],
         default: 'Car'
     },
     status: {
