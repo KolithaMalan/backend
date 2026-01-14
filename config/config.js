@@ -55,7 +55,7 @@ module.exports = {
         PROJECT_MANAGER: {
             name: 'Amal Fernando',
             email: 'amal.fernando@ltl.lk',
-            phone: '0750569545',
+            phone: '0777224705',
             password: 'Amal#$#321',
             role: 'project_manager'
         },
