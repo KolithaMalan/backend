@@ -60,9 +60,9 @@ module.exports = {
             role: 'project_manager'
         },
         ADMIN: {
-            name: 'Kolitha Malan',
-            email: 'koliyxmalan121@gmail.com',
-            phone: '0778561467',
+            name: 'Theshani Malindya',
+            email: 'receptionist.sobadhanavi@ltl.lk',
+            phone: '0741615398',
             password: 'Nithya123@#',
             role: 'admin'
         }   
