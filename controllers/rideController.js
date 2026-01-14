@@ -28,12 +28,20 @@ const createRide = async (req, res) => {
             pickupLocation,
             destinationLocation,
             scheduledDate,
-            scheduledTime
+            scheduledTime,
+            requiredVehicleType  // ✅ ADD THIS
         } = req.body;
-        
-        // ... rest of the code
 
         const requester = req.user;
+
+        // ✅ NEW: Validate required vehicle type
+        const validVehicleTypes = ['van', 'cab', 'land_master'];
+        if (!requiredVehicleType || !validVehicleTypes.includes(requiredVehicleType)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please select a valid vehicle type (Van, Cab, or Land Master)'
+            });
+        }
 
         // Validate booking window (within 14 days)
         if (!isWithinBookingWindow(scheduledDate)) {
@@ -68,51 +76,43 @@ const createRide = async (req, res) => {
             }
         }
 
-// Calculate distance
-let baseDistance;
+        // Calculate distance
+        let baseDistance;
 
-// If distance is provided from frontend (Google Maps road distance), use it
-if (req.body.distance && !isNaN(req.body.distance)) {
-    baseDistance = parseFloat(req.body.distance);
-    console.log('Using provided distance from Google Maps:', baseDistance);
-} else {
-    // Fallback to straight-line calculation
-    console.log('Calculating straight-line distance as fallback');
-    baseDistance = calculateDistance(
-        pickupLocation.coordinates.lat,
-        pickupLocation.coordinates.lng,
-        destinationLocation.coordinates.lat,
-        destinationLocation.coordinates.lng
-    );
-}
+        if (req.body.distance && !isNaN(req.body.distance)) {
+            baseDistance = parseFloat(req.body.distance);
+            console.log('Using provided distance from Google Maps:', baseDistance);
+        } else {
+            console.log('Calculating straight-line distance as fallback');
+            baseDistance = calculateDistance(
+                pickupLocation.coordinates.lat,
+                pickupLocation.coordinates.lng,
+                destinationLocation.coordinates.lat,
+                destinationLocation.coordinates.lng
+            );
+        }
 
-// For return trips, multiply distance by 2
-const calculatedDistance = rideType === 'return' ? baseDistance * 2 : baseDistance;
+        const calculatedDistance = rideType === 'return' ? baseDistance * 2 : baseDistance;
 
+        console.log(`Base distance: ${baseDistance} km, Calculated distance (${rideType}): ${calculatedDistance} km`);
+        console.log(`Required Vehicle Type: ${requiredVehicleType}`);  // ✅ ADD LOG
 
+        // Determine approval flow
+        let status;
+        let requiresPMApproval = false;
+        let isPMApproved = false;
 
-console.log(`Base distance: ${baseDistance} km, Calculated distance (${rideType}): ${calculatedDistance} km`);
-// Determine approval flow based on distance and requester role
-// Determine approval flow based on distance and requester role
-let status;
-let requiresPMApproval = false;
-let isPMApproved = false;
-
-if (requester.role === 'project_manager') {
-    // PM's rides go directly to admin for assignment (no approval needed)
-    status = 'approved';
-    isPMApproved = true;
-} else {
-    // For User, Driver, and Admin roles
-    if (calculatedDistance > config.PM_APPROVAL_THRESHOLD_KM) {
-        // ✅ NEW FLOW: Long distance rides go to BOTH PM and Admin
-        status = 'awaiting_admin';
-        requiresPMApproval = true;
-    } else {
-        // Short distance rides go to Admin only
-        status = 'awaiting_admin';
-    }
-}
+        if (requester.role === 'project_manager') {
+            status = 'approved';
+            isPMApproved = true;
+        } else {
+            if (calculatedDistance > config.PM_APPROVAL_THRESHOLD_KM) {
+                status = 'awaiting_admin';
+                requiresPMApproval = true;
+            } else {
+                status = 'awaiting_admin';
+            }
+        }
 
         // Generate unique ride ID
         let rideId = generateId(6);
@@ -122,7 +122,7 @@ if (requester.role === 'project_manager') {
             existingRide = await Ride.findOne({ rideId });
         }
 
-        // Create ride
+        // Create ride - ✅ ADD requiredVehicleType
         const ride = await Ride.create({
             rideId,
             requester: requester._id,
@@ -134,6 +134,7 @@ if (requester.role === 'project_manager') {
             calculatedDistance,
             scheduledDate,
             scheduledTime,
+            requiredVehicleType,  // ✅ ADD THIS
             status,
             requiresPMApproval,
             isPMApproved
