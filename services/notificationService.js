@@ -3,6 +3,7 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const config = require('../config/config');
 const { sendEmail, emailTemplates, isEmailConfigured } = require('./emailService');
+
 // Get hardcoded users
 const getAdmin = async () => {
     return await User.findOne({ email: config.HARDCODED_USERS.ADMIN.email });
@@ -12,7 +13,7 @@ const getProjectManager = async () => {
     return await User.findOne({ email: config.HARDCODED_USERS.PROJECT_MANAGER.email });
 };
 
-// Notify when ride is created
+// ✅ 1. Notify when ride is created
 const notifyRideCreated = async (ride, requester) => {
     try {
         const distance = ride.calculatedDistance;
@@ -30,7 +31,6 @@ const notifyRideCreated = async (ride, requester) => {
             if (pm) {
                 console.log(`📧 Sending PM notification to ${pm.email}...`);
                 
-                // Email (fire and forget - don't await)
                 if (isEmailConfigured()) {
                     const emailTemplate = emailTemplates.rideCreatedForPM(ride, requester);
                     sendEmail({
@@ -46,7 +46,6 @@ const notifyRideCreated = async (ride, requester) => {
                     });
                 }
                 
-                // SMS (fire and forget)
                 console.log(`📱 Sending PM SMS to ${pm.phone}...`);
                 sendSMS({
                     to: pm.phone,
@@ -59,7 +58,6 @@ const notifyRideCreated = async (ride, requester) => {
                     }
                 });
 
-                // In-app notification
                 await Notification.create({
                     recipient: pm._id,
                     type: 'ride_created',
@@ -77,7 +75,6 @@ const notifyRideCreated = async (ride, requester) => {
             if (admin) {
                 console.log(`📧 Sending Admin notification to ${admin.email}...`);
                 
-                // Email (fire and forget)
                 if (isEmailConfigured()) {
                     const emailTemplate = emailTemplates.rideCreatedForAdminLongDistance(ride, requester);
                     sendEmail({
@@ -93,7 +90,6 @@ const notifyRideCreated = async (ride, requester) => {
                     });
                 }
                 
-                // SMS (fire and forget)
                 console.log(`📱 Sending Admin SMS to ${admin.phone}...`);
                 sendSMS({
                     to: admin.phone,
@@ -106,7 +102,6 @@ const notifyRideCreated = async (ride, requester) => {
                     }
                 });
 
-                // In-app notification
                 await Notification.create({
                     recipient: admin._id,
                     type: 'ride_created',
@@ -123,7 +118,6 @@ const notifyRideCreated = async (ride, requester) => {
         } else {
             // Regular ride - Admin only
             if (admin) {
-                // Email
                 if (isEmailConfigured()) {
                     const emailTemplate = emailTemplates.rideCreatedForAdmin(ride, requester);
                     sendEmail({
@@ -137,13 +131,11 @@ const notifyRideCreated = async (ride, requester) => {
                     });
                 }
                 
-                // SMS
                 sendSMS({
                     to: admin.phone,
                     message: smsTemplates.rideCreatedForAdmin(ride, requester)
                 });
 
-                // In-app notification
                 await Notification.create({
                     recipient: admin._id,
                     type: 'ride_created',
@@ -164,14 +156,12 @@ const notifyRideCreated = async (ride, requester) => {
     }
 };
 
-
 // ✅ 2. Notify when PM approves ride
 const notifyPMApproved = async (ride, pm) => {
     try {
         const requester = await User.findById(ride.requester);
         const admin = await getAdmin();
 
-        // Notify Admin (SMS + Email)
         if (admin) {
             const emailTemplate = emailTemplates.pmApprovedNotifyAdmin(ride, requester, pm);
             await sendEmail({
@@ -198,7 +188,6 @@ const notifyPMApproved = async (ride, pm) => {
             console.log(`✅ Admin notified of PM approval for ride #${ride.rideId}`);
         }
 
-        // Notify User (SMS + Email)
         if (requester) {
             const emailTemplate = emailTemplates.pmApprovedNotifyUser(ride, requester);
             await sendEmail({
@@ -237,7 +226,6 @@ const notifyAdminApproved = async (ride, admin, approvalNote) => {
         const requester = await User.findById(ride.requester);
         const pm = await getProjectManager();
 
-        // Notify PM about Admin's approval with note (SMS + Email)
         if (pm && ride.calculatedDistance > config.PM_APPROVAL_THRESHOLD_KM) {
             const emailHTML = `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%); border-radius: 10px;">
@@ -292,7 +280,6 @@ const notifyAdminApproved = async (ride, admin, approvalNote) => {
             console.log(`✅ PM notified of Admin approval with note for ride #${ride.rideId}`);
         }
 
-        // Notify User (SMS + Email)
         if (requester) {
             const emailHTML = `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
@@ -339,7 +326,6 @@ const notifyRideAssigned = async (ride, driver, vehicle) => {
     try {
         const requester = await User.findById(ride.requester);
 
-        // Notify User (Email + SMS)
         if (requester) {
             const emailTemplate = emailTemplates.rideAssignedToUser(ride, requester, driver, vehicle);
             await sendEmail({
@@ -366,7 +352,6 @@ const notifyRideAssigned = async (ride, driver, vehicle) => {
             console.log(`✅ User notified of ride assignment for ride #${ride.rideId}`);
         }
 
-        // Notify Driver (Email + SMS)
         const driverEmailTemplate = emailTemplates.rideAssignedToDriver(ride, requester, driver, vehicle);
         await sendEmail({
             to: driver.email,
@@ -401,7 +386,6 @@ const notifyRideReassigned = async (ride, newDriver, newVehicle, oldDriver) => {
     try {
         const requester = await User.findById(ride.requester);
 
-        // Notify User (Email + SMS)
         if (requester) {
             const emailTemplate = emailTemplates.rideReassigned(ride, requester, newDriver, newVehicle, false);
             await sendEmail({
@@ -418,7 +402,6 @@ const notifyRideReassigned = async (ride, newDriver, newVehicle, oldDriver) => {
             console.log(`✅ User notified of ride reassignment for ride #${ride.rideId}`);
         }
 
-        // Notify New Driver (Email + SMS)
         const newDriverEmailTemplate = emailTemplates.rideAssignedToDriver(ride, requester, newDriver, newVehicle);
         await sendEmail({
             to: newDriver.email,
@@ -433,7 +416,6 @@ const notifyRideReassigned = async (ride, newDriver, newVehicle, oldDriver) => {
 
         console.log(`✅ New driver notified of ride reassignment for ride #${ride.rideId}`);
 
-        // Notify Old Driver (Email + SMS)
         if (oldDriver) {
             const oldDriverEmailTemplate = emailTemplates.rideReassigned(ride, requester, newDriver, newVehicle, true);
             await sendEmail({
@@ -456,14 +438,12 @@ const notifyRideReassigned = async (ride, newDriver, newVehicle, oldDriver) => {
     }
 };
 
-// ✅ 6. Notify when ride is rejected
-// ✅ UPDATED: Notify when ride is rejected (with reason)
+// ✅ 6. Notify when ride is rejected (with required reason)
 const notifyRideRejected = async (ride, rejectedByUser, reason = '') => {
     try {
         const requester = await User.findById(ride.requester);
 
         if (requester) {
-            // ✅ UPDATED: Email with rejection reason
             const emailHTML = `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #c62828 0%, #d32f2f 100%); border-radius: 10px;">
                     <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -508,7 +488,6 @@ const notifyRideRejected = async (ride, rejectedByUser, reason = '') => {
                 html: emailHTML
             });
             
-            // ✅ UPDATED: SMS with rejection reason
             const smsMessage = `RideManager: Your ride #${ride.rideId} has been rejected. Reason: ${reason ? reason.substring(0, 100) : 'Not specified'}${reason && reason.length > 100 ? '...' : ''}. Submit a new request if needed.`;
             
             await sendSMS({
@@ -535,10 +514,51 @@ const notifyRideRejected = async (ride, rejectedByUser, reason = '') => {
     }
 };
 
+// ✅ 7. Notify when ride is completed
+const notifyRideCompleted = async (ride) => {
+    try {
+        const requester = await User.findById(ride.requester);
+        const driver = await User.findById(ride.assignedDriver);
+        const Vehicle = require('../models/Vehicle');
+        const vehicle = await Vehicle.findById(ride.assignedVehicle);
+
+        if (requester) {
+            const emailTemplate = emailTemplates.rideCompleted(ride, requester, driver, vehicle);
+            await sendEmail({
+                to: requester.email,
+                subject: emailTemplate.subject,
+                html: emailTemplate.html
+            });
+            
+            await sendSMS({
+                to: requester.phone,
+                message: smsTemplates.rideCompleted(ride)
+            });
+
+            await Notification.create({
+                recipient: requester._id,
+                type: 'ride_completed',
+                title: 'Ride Completed',
+                message: `Your ride #${ride.rideId} has been completed successfully.`,
+                ride: ride._id,
+                emailSent: true,
+                smsSent: true
+            });
+
+            console.log(`✅ User notified of ride completion for ride #${ride.rideId}`);
+        }
+
+        console.log('✅ Ride completion notifications sent');
+    } catch (error) {
+        console.error('❌ Error sending ride completion notifications:', error);
+    }
+};
+
+// ✅ Export all functions
 module.exports = {
     notifyRideCreated,
     notifyPMApproved,
-    notifyAdminApproved, // NEW: For when admin approves with note
+    notifyAdminApproved,
     notifyRideAssigned,
     notifyRideReassigned,
     notifyRideRejected,
