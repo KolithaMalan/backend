@@ -581,9 +581,28 @@ const adminApproveRide = async (req, res) => {
 // @desc    Admin reject ride
 // @route   PUT /api/rides/:id/admin-reject
 // @access  Private (Admin only)
+// @desc    Admin reject ride
+// @route   PUT /api/rides/:id/admin-reject
+// @access  Private (Admin only)
 const adminRejectRide = async (req, res) => {
     try {
         const { reason } = req.body;
+
+        // ✅ NEW: Require rejection reason
+        if (!reason || reason.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                message: 'Rejection reason is required'
+            });
+        }
+
+        if (reason.trim().length < 10) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide a more detailed reason (at least 10 characters)'
+            });
+        }
+
         const ride = await Ride.findById(req.params.id);
 
         if (!ride) {
@@ -602,18 +621,18 @@ const adminRejectRide = async (req, res) => {
 
         ride.status = 'rejected';
         ride.rejectedBy.user = req.user._id;
-        ride.rejectedBy.role = 'admin'; // ✅ ADD ROLE
+        ride.rejectedBy.role = 'admin';
         ride.rejectedBy.rejectedAt = new Date();
-        ride.rejectedBy.reason = reason || null;
+        ride.rejectedBy.reason = reason.trim();  // ✅ Save the reason
         await ride.save();
 
         // ✅ Populate for notifications
         await ride.populate('requester', 'name email phone');
 
-        // Send rejection notification to requester
-        await notifyRideRejected(ride, req.user);
+        // Send rejection notification to requester WITH REASON
+        await notifyRideRejected(ride, req.user, reason.trim());
 
-        // ✅ NEW: If it was a long-distance ride, notify PM
+        // If it was a long-distance ride, notify PM
         if (ride.requiresPMApproval) {
             const pm = await User.findOne({ email: config.HARDCODED_USERS.PROJECT_MANAGER.email });
             if (pm) {
@@ -628,11 +647,14 @@ const adminRejectRide = async (req, res) => {
                             <h2 style="color: #c62828;">Admin Rejected Long Distance Ride</h2>
                             <p>Admin ${req.user.name} has rejected ride request #${ride.rideId}.</p>
                             <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                                <p><strong>Ride ID:</strong> ${ride.rideId}</p>
+                                <p><strong>Ride ID:</strong> #${ride.rideId}</p>
                                 <p><strong>Requester:</strong> ${ride.requester.name}</p>
                                 <p><strong>Distance:</strong> ${ride.calculatedDistance} km</p>
                                 <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
-                                ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+                            </div>
+                            <div style="background: #ffebee; padding: 15px; border-radius: 8px; border-left: 4px solid #c62828;">
+                                <h4 style="color: #c62828; margin-top: 0;">Rejection Reason:</h4>
+                                <p style="margin: 0;">${reason.trim()}</p>
                             </div>
                         </div>
                     `
@@ -640,7 +662,7 @@ const adminRejectRide = async (req, res) => {
                 
                 await sendSMS({
                     to: pm.phone,
-                    message: `RideManager: Admin rejected ride #${ride.rideId} (${ride.calculatedDistance}km). ${reason ? 'Reason: ' + reason.substring(0, 80) : ''}`
+                    message: `RideManager: Admin rejected ride #${ride.rideId} (${ride.calculatedDistance}km). Reason: ${reason.trim().substring(0, 80)}${reason.length > 80 ? '...' : ''}`
                 });
 
                 console.log(`✅ PM notified of Admin rejection for ride #${ride.rideId}`);
@@ -649,7 +671,7 @@ const adminRejectRide = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Ride rejected',
+            message: 'Ride rejected. Requester has been notified.',
             ride
         });
     } catch (error) {
