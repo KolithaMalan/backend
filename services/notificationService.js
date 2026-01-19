@@ -457,79 +457,81 @@ const notifyRideReassigned = async (ride, newDriver, newVehicle, oldDriver) => {
 };
 
 // ✅ 6. Notify when ride is rejected
-const notifyRideRejected = async (ride, rejectedByUser) => {
+// ✅ UPDATED: Notify when ride is rejected (with reason)
+const notifyRideRejected = async (ride, rejectedByUser, reason = '') => {
     try {
         const requester = await User.findById(ride.requester);
 
         if (requester) {
-            const emailTemplate = emailTemplates.rideRejected(ride, requester, rejectedByUser);
+            // ✅ UPDATED: Email with rejection reason
+            const emailHTML = `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #c62828 0%, #d32f2f 100%); border-radius: 10px;">
+                    <div style="background: white; padding: 30px; border-radius: 8px;">
+                        <h1 style="color: #c62828; margin-bottom: 20px;">❌ Ride Request Rejected</h1>
+                        
+                        <p>Dear ${requester.name},</p>
+                        <p>We regret to inform you that your ride request has been rejected by ${rejectedByUser.name} (${rejectedByUser.role === 'admin' ? 'Administrator' : 'Project Manager'}).</p>
+                        
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="color: #333; margin-top: 0;">Ride Details</h3>
+                            <p><strong>Ride ID:</strong> #${ride.rideId}</p>
+                            <p><strong>Date:</strong> ${new Date(ride.scheduledDate).toLocaleDateString()}</p>
+                            <p><strong>Time:</strong> ${ride.scheduledTime}</p>
+                            <p><strong>From:</strong> ${ride.pickupLocation?.address || 'N/A'}</p>
+                            <p><strong>To:</strong> ${ride.destinationLocation?.address || 'N/A'}</p>
+                            <p><strong>Distance:</strong> ${ride.calculatedDistance} km</p>
+                        </div>
+                        
+                        <div style="background: #ffebee; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #c62828;">
+                            <h4 style="color: #c62828; margin-top: 0;">📋 Rejection Reason</h4>
+                            <p style="color: #333; margin: 0; font-size: 15px;">${reason || 'No reason provided'}</p>
+                        </div>
+                        
+                        <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                            <p style="color: #e65100; margin: 0;">
+                                <strong>What to do next?</strong><br>
+                                You can submit a new ride request with updated details if needed. 
+                                If you have questions, please contact the administrator.
+                            </p>
+                        </div>
+                        
+                        <p style="color: #666; font-size: 12px; margin-top: 30px; text-align: center;">
+                            This is an automated message from RideManager System
+                        </p>
+                    </div>
+                </div>
+            `;
+
             await sendEmail({
                 to: requester.email,
-                subject: emailTemplate.subject,
-                html: emailTemplate.html
+                subject: `❌ Ride Request #${ride.rideId} - Rejected`,
+                html: emailHTML
             });
+            
+            // ✅ UPDATED: SMS with rejection reason
+            const smsMessage = `RideManager: Your ride #${ride.rideId} has been rejected. Reason: ${reason ? reason.substring(0, 100) : 'Not specified'}${reason && reason.length > 100 ? '...' : ''}. Submit a new request if needed.`;
             
             await sendSMS({
                 to: requester.phone,
-                message: smsTemplates.rideRejected(ride)
+                message: smsMessage
             });
 
             await Notification.create({
                 recipient: requester._id,
                 type: 'ride_rejected',
                 title: 'Ride Rejected',
-                message: `Your ride request #${ride.rideId} has been rejected.`,
+                message: `Your ride request #${ride.rideId} has been rejected. Reason: ${reason || 'Not specified'}`,
                 ride: ride._id,
                 emailSent: true,
                 smsSent: true
             });
 
-            console.log(`✅ User notified of ride rejection for ride #${ride.rideId}`);
+            console.log(`✅ User notified of ride rejection for ride #${ride.rideId} with reason`);
         }
 
         console.log('✅ Ride rejection notifications sent');
     } catch (error) {
         console.error('❌ Error sending ride rejection notifications:', error);
-    }
-};
-
-// ✅ 7. Notify when ride is completed
-const notifyRideCompleted = async (ride) => {
-    try {
-        const requester = await User.findById(ride.requester);
-        const driver = await User.findById(ride.assignedDriver);
-        const Vehicle = require('../models/Vehicle');
-        const vehicle = await Vehicle.findById(ride.assignedVehicle);
-
-        if (requester) {
-            const emailTemplate = emailTemplates.rideCompleted(ride, requester, driver, vehicle);
-            await sendEmail({
-                to: requester.email,
-                subject: emailTemplate.subject,
-                html: emailTemplate.html
-            });
-            
-            await sendSMS({
-                to: requester.phone,
-                message: smsTemplates.rideCompleted(ride)
-            });
-
-            await Notification.create({
-                recipient: requester._id,
-                type: 'ride_completed',
-                title: 'Ride Completed',
-                message: `Your ride #${ride.rideId} has been completed successfully.`,
-                ride: ride._id,
-                emailSent: true,
-                smsSent: true
-            });
-
-            console.log(`✅ User notified of ride completion for ride #${ride.rideId}`);
-        }
-
-        console.log('✅ Ride completion notifications sent');
-    } catch (error) {
-        console.error('❌ Error sending ride completion notifications:', error);
     }
 };
 
