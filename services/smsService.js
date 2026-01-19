@@ -147,8 +147,12 @@ const smsTemplates = {
         `RideManager: Your ride #${ride.rideId} driver updated. New driver: ${driver.name} (${driver.phone}), Vehicle: ${vehicle.vehicleNumber}.`,
 
     // Ride rejected
-    rideRejected: (ride) => 
-        `RideManager: Your ride request #${ride.rideId} has been rejected. ${ride.rejectedBy?.reason ? 'Reason: ' + ride.rejectedBy.reason.substring(0, 80) : 'Please submit a new request if needed.'}`,
+    rideRejected: (ride, reason = '') => {
+        const reasonText = reason 
+            ? `Reason: ${reason.substring(0, 100)}${reason.length > 100 ? '...' : ''}` 
+            : 'Please contact admin for details.';
+        return `RideManager: Your ride #${ride.rideId} has been rejected. ${reasonText} Submit a new request if needed.`;
+    },
 
     // Ride completed
     rideCompleted: (ride) => 
