@@ -59,6 +59,31 @@ const createRide = async (req, res) => {
             });
         }
 
+        // ✅ NEW: Validate that time is not in the past for today's date
+        const now = new Date();
+        const scheduledDateObj = new Date(scheduledDate);
+
+        const isToday = 
+            scheduledDateObj.getFullYear() === now.getFullYear() &&
+            scheduledDateObj.getMonth() === now.getMonth() &&
+            scheduledDateObj.getDate() === now.getDate();
+
+        if (isToday && scheduledTime) {
+            const [hours, minutes] = scheduledTime.split(':').map(Number);
+            const scheduledDateTime = new Date(scheduledDateObj);
+            scheduledDateTime.setHours(hours, minutes, 0, 0);
+            
+            // Add 30 minutes buffer
+            const minimumTime = new Date(now.getTime() + 30 * 60 * 1000);
+            
+            if (scheduledDateTime < minimumTime) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot book rides for past times. Please select a time at least 30 minutes from now.'
+                });
+            }
+        }
+
         // Check pending rides limit for regular users (max 3)
         if (requester.role === 'user') {
             const pendingRides = await Ride.countDocuments({
