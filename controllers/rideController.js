@@ -59,30 +59,47 @@ const createRide = async (req, res) => {
             });
         }
 
-        // ✅ NEW: Validate that time is not in the past for today's date
-        const now = new Date();
-        const scheduledDateObj = new Date(scheduledDate);
+// ✅ UPDATED: Validate time - must be next 30-minute slot or later
+const now = new Date();
+const scheduledDateObj = new Date(scheduledDate);
 
-        const isToday = 
-            scheduledDateObj.getFullYear() === now.getFullYear() &&
-            scheduledDateObj.getMonth() === now.getMonth() &&
-            scheduledDateObj.getDate() === now.getDate();
+const isToday = 
+    scheduledDateObj.getFullYear() === now.getFullYear() &&
+    scheduledDateObj.getMonth() === now.getMonth() &&
+    scheduledDateObj.getDate() === now.getDate();
 
-        if (isToday && scheduledTime) {
-            const [hours, minutes] = scheduledTime.split(':').map(Number);
-            const scheduledDateTime = new Date(scheduledDateObj);
-            scheduledDateTime.setHours(hours, minutes, 0, 0);
-            
-            // Add 30 minutes buffer
-            const minimumTime = new Date(now.getTime() + 30 * 60 * 1000);
-            
-            if (scheduledDateTime < minimumTime) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Cannot book rides for past times. Please select a time at least 30 minutes from now.'
-                });
-            }
-        }
+if (isToday && scheduledTime) {
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    
+    // Calculate next available slot
+    let nextSlotHour = currentHour;
+    let nextSlotMinute;
+    
+    if (currentMinutes >= 0 && currentMinutes <= 29) {
+        nextSlotMinute = 30;
+    } else {
+        nextSlotMinute = 0;
+        nextSlotHour += 1;
+    }
+    
+    // Parse selected time
+    const [selectedHour, selectedMinute] = scheduledTime.split(':').map(Number);
+    
+    // Check if selected time is before the next available slot
+    const selectedTotalMinutes = selectedHour * 60 + selectedMinute;
+    const nextSlotTotalMinutes = nextSlotHour * 60 + nextSlotMinute;
+    
+    if (selectedTotalMinutes < nextSlotTotalMinutes) {
+        const hour12 = nextSlotHour === 0 ? 12 : nextSlotHour > 12 ? nextSlotHour - 12 : nextSlotHour;
+        const ampm = nextSlotHour < 12 ? 'AM' : 'PM';
+        
+        return res.status(400).json({
+            success: false,
+            message: `Cannot book rides for past times. Earliest available time is ${hour12}:${nextSlotMinute.toString().padStart(2, '0')} ${ampm}`
+        });
+    }
+}
 
         // Check pending rides limit for regular users (max 3)
         if (requester.role === 'user') {
