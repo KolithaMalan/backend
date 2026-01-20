@@ -13,26 +13,26 @@ const {
     getUserCounts
 } = require('../controllers/userController');
 const { protect } = require('../middleware/authMiddleware');
-const { authorize, isAdmin } = require('../middleware/roleMiddleware');
+const { authorize } = require('../middleware/roleMiddleware');
 const { validateCreateUser, handleValidationErrors } = require('../utils/validators');
 
-// All routes require authentication
+// ✅ All routes require authentication
 router.use(protect);
 
-// Admin only routes
-router.get('/', authorize('admin'), getUsers);
-router.get('/counts', authorize('admin'), getUserCounts);
+// ✅ UPDATED: Admin + PM have FULL access to all user operations
+router.get('/', authorize('admin', 'project_manager'), getUsers);
+router.get('/counts', authorize('admin', 'project_manager'), getUserCounts);
 router.get('/drivers', authorize('admin', 'project_manager'), getDrivers);
-router.get('/drivers/available', authorize('admin'), getAvailableDrivers);
-router.post('/', authorize('admin'), validateCreateUser, handleValidationErrors, createUser);
-
-// Get driver stats (Admin and PM)
+router.get('/drivers/available', authorize('admin', 'project_manager'), getAvailableDrivers);
 router.get('/drivers/:id/stats', authorize('admin', 'project_manager'), getDriverStats);
 
-// Single user operations
-router.get('/:id', authorize('admin'), getUser);
-router.put('/:id', authorize('admin'), updateUser);
-router.delete('/:id', authorize('admin'), deleteUser);
-router.put('/:id/reset-password', authorize('admin'), resetUserPassword);
+// ✅ UPDATED: PM can now CREATE users
+router.post('/', authorize('admin', 'project_manager'), validateCreateUser, handleValidationErrors, createUser);
+
+// ✅ UPDATED: PM can now view/edit/delete individual users
+router.get('/:id', authorize('admin', 'project_manager'), getUser);
+router.put('/:id', authorize('admin', 'project_manager'), updateUser);
+router.delete('/:id', authorize('admin', 'project_manager'), deleteUser);
+router.put('/:id/reset-password', authorize('admin', 'project_manager'), resetUserPassword);
 
 module.exports = router;
