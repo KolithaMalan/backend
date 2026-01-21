@@ -124,7 +124,7 @@ const smsTemplates = {
 
     // PM approved - notify User
     pmApprovedNotifyUser: (ride) => 
-        `RideManager: Your ride #${ride.rideId} has been approved by Project Manager. Driver will be assigned soon.`,
+        `RideManager: Your ride #${ride.rideId} has been approved by Plant Manager. Driver will be assigned soon.`,
 
     // Ride assigned - notify User
     rideAssignedToUser: (ride, driver, vehicle) => 

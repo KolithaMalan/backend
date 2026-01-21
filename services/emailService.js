@@ -256,7 +256,7 @@ const emailTemplates = {
                     
                     <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
                         <p style="color: #2e7d32; margin: 0; font-weight: bold;">
-                            Project Manager ${pm.name} has approved this ride. Please assign a driver and vehicle.
+                            Plant Manager ${pm.name} has approved this ride. Please assign a driver and vehicle.
                         </p>
                     </div>
                     
@@ -288,7 +288,7 @@ const emailTemplates = {
                     <h1 style="color: #1a5f2a; margin-bottom: 20px;">✅ Ride Request Approved</h1>
                     
                     <p>Dear ${user.name},</p>
-                    <p>Good news! Your ride request has been approved by the Project Manager. The admin will now assign a driver and vehicle for your trip.</p>
+                    <p>Good news! Your ride request has been approved by the Plant Manager. The admin will now assign a driver and vehicle for your trip.</p>
                     
                     <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
                         <h3 style="color: #333; margin-top: 0;">Ride Details</h3>

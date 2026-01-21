@@ -205,7 +205,7 @@ const notifyPMApproved = async (ride, pm) => {
                 recipient: requester._id,
                 type: 'ride_approved',
                 title: 'Ride Approved by PM',
-                message: `Your ride #${ride.rideId} has been approved by Project Manager. Driver assignment pending.`,
+                message: `Your ride #${ride.rideId} has been approved by Plant Manager. Driver assignment pending.`,
                 ride: ride._id,
                 emailSent: true,
                 smsSent: true

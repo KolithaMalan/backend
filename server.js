@@ -18,6 +18,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 
+
 // Connect to MongoDB
 connectDB();
 
