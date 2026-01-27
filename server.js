@@ -14,6 +14,7 @@ const userRoutes = require('./routes/userRoutes');
 const vehicleRoutes = require('./routes/vehicleRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const trackingRoutes = require('./routes/trackingRoutes');
 
 
 const app = express();
@@ -24,6 +25,9 @@ connectDB();
 
 // Security Middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+app.use('/api/tracking', trackingRoutes);
+
 
 // CORS configuration - UPDATED FOR VERCEL DEPLOYMENTS
 const corsOptions = {
