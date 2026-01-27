@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
-require('dotenv').config(); // Loads .env locally
+require('dotenv').config();
 const connectDB = require('./config/db');
 
 // Import routes
@@ -16,9 +16,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const trackingRoutes = require('./routes/trackingRoutes');
 
-
 const app = express();
-
 
 // Connect to MongoDB
 connectDB();
@@ -26,13 +24,12 @@ connectDB();
 // Security Middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
-app.use('/api/tracking', trackingRoutes);
+// ❌ REMOVE THIS LINE FROM HERE:
+// app.use('/api/tracking', trackingRoutes);
 
-
-// CORS configuration - UPDATED FOR VERCEL DEPLOYMENTS
+// CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, curl, etc.)
     if (!origin) return callback(null, true);
     
     const allowedOrigins = [
@@ -40,16 +37,14 @@ const corsOptions = {
       'http://localhost:5173',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5173',
-      'https://vehicle-managment.vercel.app', // Your production URL
+      'https://vehicle-managment.vercel.app',
       process.env.FRONTEND_URL
-    ].filter(Boolean); // Remove undefined values
+    ].filter(Boolean);
     
-    // Allow all Vercel preview deployments (*.vercel.app)
     if (origin.endsWith('.vercel.app')) {
       return callback(null, true);
     }
     
-    // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -62,7 +57,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
   optionsSuccessStatus: 200,
-  maxAge: 86400 // Cache preflight requests for 24 hours
+  maxAge: 86400
 };
 
 app.use(cors(corsOptions));
@@ -76,7 +71,6 @@ app.use(cookieParser());
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 } else {
-  // Log important info in production
   app.use(morgan('combined'));
 }
 
@@ -88,13 +82,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// API Routes
+// API Routes - ALL ROUTES GO HERE (AFTER CORS)
 app.use('/api/auth', authRoutes);
 app.use('/api/rides', rideRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/tracking', trackingRoutes);  // ✅ ADD IT HERE WITH OTHER ROUTES
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -109,7 +104,8 @@ app.get('/', (req, res) => {
       users: '/api/users',
       vehicles: '/api/vehicles',
       reports: '/api/reports',
-      notifications: '/api/notifications'
+      notifications: '/api/notifications',
+      tracking: '/api/tracking'  // ✅ Add this to the list
     }
   });
 });
@@ -126,7 +122,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 404 Handler - Must be after all routes
+// 404 Handler
 app.use((req, res) => {
   res.status(404).json({ 
     success: false, 
@@ -136,7 +132,6 @@ app.use((req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  // Log error details
   console.error('Error Details:', {
     message: err.message,
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
@@ -168,12 +163,12 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 ╚════════════════════════════════════════╝
   `);
 
-  // Log environment info in production
   if (process.env.NODE_ENV === 'production') {
     console.log('🔧 Production Configuration:');
     console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'Not Set'}`);
     console.log(`   MongoDB: ${process.env.MONGODB_URI ? 'Connected' : 'Not configured'}`);
     console.log(`   JWT Secret: ${process.env.JWT_SECRET ? 'Set' : 'Not Set'}`);
+    console.log(`   Tracking API: ${process.env.ORONLANKA_API_KEY ? 'Configured' : 'Not Set'}`);
   }
 });
 
@@ -208,7 +203,6 @@ process.on('SIGTERM', () => {
   });
 });
 
-// Handle SIGINT (Ctrl+C)
 process.on('SIGINT', () => {
   console.log('\n👋 SIGINT received. Shutting down gracefully...');
   server.close(() => {
