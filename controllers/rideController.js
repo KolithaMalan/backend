@@ -101,23 +101,6 @@ if (isToday && scheduledTime) {
     }
 }
 
-        // Check pending rides limit for regular users (max 3)
-        if (requester.role === 'user') {
-            const pendingRides = await Ride.countDocuments({
-                requester: requester._id,
-                status: { 
-                    $in: ['pending', 'awaiting_pm', 'awaiting_admin', 'pm_approved', 'approved', 'assigned'] 
-                }
-            });
-
-            if (pendingRides >= config.MAX_PENDING_RIDES_USER) {
-                return res.status(400).json({
-                    success: false,
-                    message: `You can only have ${config.MAX_PENDING_RIDES_USER} pending ride requests at a time`
-                });
-            }
-        }
-
         // Calculate distance
         let baseDistance;
 
@@ -1245,6 +1228,54 @@ const cancelRide = async (req, res) => {
     }
 };
 
+// @desc    Delete pending ride request (permanently removes from database)
+// @route   DELETE /api/rides/:id
+// @access  Private
+const deleteRide = async (req, res) => {
+    try {
+        const ride = await Ride.findById(req.params.id);
+
+        if (!ride) {
+            return res.status(404).json({
+                success: false,
+                message: 'Ride not found'
+            });
+        }
+
+        // Check if user owns this ride or is admin
+        if (ride.requester.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to delete this ride'
+            });
+        }
+
+        // Can only delete rides that are in pending/awaiting states
+        const deletableStatuses = ['pending', 'awaiting_pm', 'awaiting_admin', 'cancelled', 'rejected'];
+        if (!deletableStatuses.includes(ride.status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Only pending, cancelled, or rejected rides can be deleted'
+            });
+        }
+
+        // Permanently delete the ride from the database
+        await Ride.findByIdAndDelete(req.params.id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Ride request deleted successfully'
+        });
+    } catch (error) {
+        console.error('Delete ride error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
+
 // @desc    Get user's ride statistics
 // @route   GET /api/rides/my-stats
 // @access  Private
@@ -1476,6 +1507,7 @@ module.exports = {
     startRide,
     completeRide,
     cancelRide,
+    deleteRide,
     getMyRideStats,
     getDriverAssignedRides,
     getDriverDailyRides,
