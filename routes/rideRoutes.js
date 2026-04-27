@@ -16,6 +16,7 @@ const {
     startRide,
     completeRide,
     cancelRide,
+    deleteRide,
     getMyRideStats,
     getDriverAssignedRides,
     getDriverDailyRides,
@@ -59,6 +60,7 @@ router.put('/:id/complete', authorize('driver'), completeRide);
 
 // User routes
 router.put('/:id/cancel', cancelRide);
+router.delete('/:id', deleteRide);
 
 // Get single ride (must be last due to :id param)
 router.get('/:id', getRide);
