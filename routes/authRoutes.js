@@ -6,7 +6,9 @@ const {
     logout,
     getMe,
     updateProfile,
-    changePassword
+    changePassword,
+    forgotPassword,
+    resetPassword
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const { 
@@ -18,6 +20,8 @@ const {
 // Public routes
 router.post('/register', validateRegister, handleValidationErrors, register);
 router.post('/login', validateLogin, handleValidationErrors, login);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 
 // Protected routes
 router.post('/logout', protect, logout);
