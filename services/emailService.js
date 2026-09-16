@@ -1,83 +1,63 @@
 const nodemailer = require('nodemailer');
 
-// Try to load SendGrid (optional fallback)
-let sgMail;
-try {
-    sgMail = require('@sendgrid/mail');
-} catch (e) {
-    console.log('ℹ️ SendGrid not available, using Nodemailer only');
-}
+// -------------------------------------------------------
+// Gmail SMTP transporter
+// Port 465 (SSL/secure:true) works on cloud hosts.
+// Port 587 (STARTTLS) is often blocked by cloud providers.
+// -------------------------------------------------------
 
-// Create Nodemailer transporter (Gmail SMTP)
-let nodemailerTransporter = null;
+let _transporter = null;
 
-const getNodemailerTransporter = () => {
-    if (nodemailerTransporter) return nodemailerTransporter;
+const createTransporter = () => {
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
 
-    const smtpUser = process.env.SMTP_USER || process.env.EMAIL_FROM;
-    const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_APP_PASSWORD;
-
-    if (!smtpUser || !smtpPass) {
-        return null;
+    if (!user || !pass) {
+        throw new Error(
+            'Gmail SMTP not configured. Add SMTP_USER (your Gmail address) and SMTP_PASS (Gmail App Password) to your environment variables.'
+        );
     }
 
-    nodemailerTransporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_SECURE === 'true', // true for 465, false for 587
-        auth: {
-            user: smtpUser,
-            pass: smtpPass,
-        },
+    // Port 465 + secure:true = SSL — works on Railway, Render, etc.
+    return nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,  // SSL — do NOT use STARTTLS (port 587) on cloud hosts
+        auth: { user, pass },
+        tls: {
+            rejectUnauthorized: false // allow self-signed certs in some environments
+        }
     });
-
-    console.log(`✅ Nodemailer transporter created (${process.env.SMTP_HOST || 'smtp.gmail.com'})`);
-    return nodemailerTransporter;
 };
 
-// Initialize SendGrid with API key (fallback)
-const initializeSendGrid = () => {
-    if (!sgMail) return false;
-    if (process.env.SENDGRID_API_KEY) {
-        sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-        console.log('✅ SendGrid initialized with API key');
-        return true;
-    }
-    return false;
-};
-
-// Check if email is properly configured (any method)
+// Check if email is properly configured
 const isEmailConfigured = () => {
     if (process.env.DISABLE_EMAIL === 'true') {
-        console.log('⚠️ Email is disabled via DISABLE_EMAIL env variable');
+        console.log('⚠️ Email disabled via DISABLE_EMAIL env variable');
         return false;
     }
-
-    // Check Nodemailer (Gmail SMTP) config
-    const smtpUser = process.env.SMTP_USER || process.env.EMAIL_FROM;
-    const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_APP_PASSWORD;
-    if (smtpUser && smtpPass) {
-        return true;
+    const ok = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+    if (!ok) {
+        console.warn('⚠️ Email not configured. Set SMTP_USER and SMTP_PASS environment variables.');
     }
-
-    // Check SendGrid config
-    if (process.env.SENDGRID_API_KEY && process.env.EMAIL_FROM) {
-        return true;
-    }
-
-    console.warn('⚠️ Email not configured. Set SMTP_USER + SMTP_PASS (or EMAIL_APP_PASSWORD) for Gmail SMTP, or SENDGRID_API_KEY for SendGrid.');
-    return false;
+    return ok;
 };
 
-// Send email via Nodemailer (Gmail SMTP) — primary method
-const sendViaNodemailer = async ({ to, subject, html, text }) => {
-    const transporter = getNodemailerTransporter();
-    if (!transporter) {
-        throw new Error('Nodemailer not configured. Set SMTP_USER and SMTP_PASS (or EMAIL_APP_PASSWORD) environment variables.');
+// Send an email via Gmail SMTP
+const sendEmail = async ({ to, subject, html, text }) => {
+    if (!isEmailConfigured()) {
+        throw new Error(
+            'Email service not configured. Set SMTP_USER (Gmail address) and SMTP_PASS (Gmail App Password) in your environment variables.'
+        );
     }
 
-    const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_USER;
-    const fromName = process.env.EMAIL_FROM_NAME || 'RideManager';
+    if (!_transporter) {
+        _transporter = createTransporter();
+        console.log('✅ Gmail SMTP transporter ready (port 465 SSL)');
+    }
+
+    const fromEmail = process.env.SMTP_USER;
+    const fromName  = process.env.EMAIL_FROM_NAME || 'RideManager';
 
     const mailOptions = {
         from: `"${fromName}" <${fromEmail}>`,
@@ -87,108 +67,21 @@ const sendViaNodemailer = async ({ to, subject, html, text }) => {
         text: text || subject,
     };
 
-    console.log(`📧 Sending email to ${to} via Nodemailer (SMTP)...`);
+    console.log(`📧 Sending email to ${to} via Gmail SMTP (${fromEmail})...`);
 
-    const info = await transporter.sendMail(mailOptions);
-
-    console.log(`✅ Email sent successfully to ${to}`);
-    console.log(`   Message ID: ${info.messageId}`);
-
-    return {
-        success: true,
-        messageId: info.messageId,
-        response: info.response,
-    };
+    try {
+        const info = await _transporter.sendMail(mailOptions);
+        console.log(`✅ Email sent successfully to ${to}  [msgId: ${info.messageId}]`);
+        return { success: true, messageId: info.messageId };
+    } catch (error) {
+        // Reset transporter so next attempt creates a fresh connection
+        _transporter = null;
+        console.error(`❌ Gmail SMTP failed: ${error.message}`);
+        throw error;
+    }
 };
 
-// Send email via SendGrid — fallback method
-const sendViaSendGrid = async ({ to, subject, html, text }) => {
-    if (!sgMail || !process.env.SENDGRID_API_KEY) {
-        throw new Error('SendGrid not configured');
-    }
 
-    initializeSendGrid();
-
-    const msg = {
-        to,
-        from: {
-            email: process.env.EMAIL_FROM,
-            name: process.env.EMAIL_FROM_NAME || 'RideManager',
-        },
-        subject,
-        html,
-        text: text || subject,
-    };
-
-    console.log(`📧 Sending email to ${to} via SendGrid API...`);
-
-    const sendPromise = sgMail.send(msg);
-    const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Email send timeout after 15s')), 15000)
-    );
-
-    const result = await Promise.race([sendPromise, timeoutPromise]);
-
-    console.log(`✅ Email sent successfully to ${to}`);
-    console.log(`   Status: ${result[0].statusCode}`);
-
-    return {
-        success: true,
-        statusCode: result[0].statusCode,
-        response: result[0].body,
-    };
-};
-
-// Main sendEmail function — tries Nodemailer first, falls back to SendGrid
-const sendEmail = async ({ to, subject, html, text }) => {
-    // Check configuration first
-    if (!isEmailConfigured()) {
-        const errorMsg = 'Email service not configured. Please set SMTP_USER and SMTP_PASS (or EMAIL_APP_PASSWORD) in your .env file.';
-        console.error(`❌ ${errorMsg}`);
-        throw new Error(errorMsg);
-    }
-
-    // Try Nodemailer (Gmail SMTP) first
-    const smtpUser = process.env.SMTP_USER || process.env.EMAIL_FROM;
-    const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_APP_PASSWORD;
-
-    if (smtpUser && smtpPass) {
-        try {
-            return await sendViaNodemailer({ to, subject, html, text });
-        } catch (nodemailerError) {
-            console.error(`❌ Nodemailer failed: ${nodemailerError.message}`);
-
-            // If SendGrid is also configured, try it as fallback
-            if (process.env.SENDGRID_API_KEY) {
-                console.log('🔄 Falling back to SendGrid...');
-                try {
-                    return await sendViaSendGrid({ to, subject, html, text });
-                } catch (sendGridError) {
-                    console.error(`❌ SendGrid fallback also failed: ${sendGridError.message}`);
-                    throw new Error(`Email failed via both SMTP and SendGrid. SMTP error: ${nodemailerError.message}`);
-                }
-            }
-
-            throw nodemailerError;
-        }
-    }
-
-    // Try SendGrid if Nodemailer is not configured
-    if (process.env.SENDGRID_API_KEY) {
-        try {
-            return await sendViaSendGrid({ to, subject, html, text });
-        } catch (sendGridError) {
-            console.error(`❌ SendGrid failed: ${sendGridError.message}`);
-            if (sendGridError.response) {
-                console.error(`   Status: ${sendGridError.response.statusCode}`);
-                console.error(`   Body:`, sendGridError.response.body);
-            }
-            throw sendGridError;
-        }
-    }
-
-    throw new Error('No email transport available. Configure SMTP or SendGrid.');
-};
 
 // Email Templates
 const emailTemplates = {
