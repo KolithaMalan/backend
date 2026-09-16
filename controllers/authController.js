@@ -255,7 +255,7 @@ const forgotPassword = async (req, res) => {
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
 
-        // Try to send email
+        // Send email
         try {
             const { sendEmail } = require('../services/emailService');
             await sendEmail({
@@ -291,18 +291,34 @@ const forgotPassword = async (req, res) => {
                     </div>
                 `
             });
+
+            console.log(`✅ Password reset email sent to ${user.email}`);
         } catch (emailError) {
-            console.error('Failed to send reset email:', emailError);
-            // Don't fail the request if email fails - still return success
-            // In development, log the reset URL for testing
+            console.error('❌ Failed to send reset email:', emailError.message);
+
+            // Clear the reset token since we couldn't send the email
+            user.resetPasswordToken = undefined;
+            user.resetPasswordExpire = undefined;
+            await user.save({ validateBeforeSave: false });
+
+            // In development, log the reset URL for manual testing
             if (process.env.NODE_ENV === 'development') {
                 console.log('\n🔑 PASSWORD RESET LINK (dev mode):');
                 console.log(resetUrl);
                 console.log('');
             }
+
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to send password reset email. Please check email configuration or try again later.',
+                ...(process.env.NODE_ENV === 'development' && { 
+                    error: emailError.message,
+                    resetUrl  // Include in dev for testing
+                })
+            });
         }
 
-        // In development, also include the token in response for testing
+        // Success response
         const responseData = {
             success: true,
             message: 'If an account with that email exists, a password reset link has been sent.'
