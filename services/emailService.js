@@ -1,85 +1,113 @@
-const nodemailer = require('nodemailer');
+const axios = require('axios');
 
-// -------------------------------------------------------
-// Gmail SMTP transporter
-// Port 465 (SSL/secure:true) works on cloud hosts.
-// Port 587 (STARTTLS) is often blocked by cloud providers.
-// -------------------------------------------------------
+// ---------------------------------------------------------------
+// Gmail REST API via OAuth2
+// Uses HTTPS port 443 — works on ALL cloud hosts (Railway, Render,
+// Heroku, etc.) because SMTP ports (587/465) are typically blocked.
+//
+// Required env vars:
+//   GMAIL_USER          — e.g. sobadhanavi.ride.management@gmail.com
+//   GMAIL_CLIENT_ID     — from Google Cloud Console
+//   GMAIL_CLIENT_SECRET — from Google Cloud Console
+//   GMAIL_REFRESH_TOKEN — from OAuth2 Playground
+// ---------------------------------------------------------------
 
-let _transporter = null;
-
-const createTransporter = () => {
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
-
-    if (!user || !pass) {
-        throw new Error(
-            'Gmail SMTP not configured. Add SMTP_USER (your Gmail address) and SMTP_PASS (Gmail App Password) to your environment variables.'
-        );
-    }
-
-    // Port 465 + secure:true = SSL — works on Railway, Render, etc.
-    return nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,  // SSL — do NOT use STARTTLS (port 587) on cloud hosts
-        auth: { user, pass },
-        tls: {
-            rejectUnauthorized: false // allow self-signed certs in some environments
-        }
-    });
-};
-
-// Check if email is properly configured
+// Check if Gmail API is properly configured
 const isEmailConfigured = () => {
     if (process.env.DISABLE_EMAIL === 'true') {
         console.log('⚠️ Email disabled via DISABLE_EMAIL env variable');
         return false;
     }
-    const ok = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
-    if (!ok) {
-        console.warn('⚠️ Email not configured. Set SMTP_USER and SMTP_PASS environment variables.');
+    const required = ['GMAIL_USER', 'GMAIL_CLIENT_ID', 'GMAIL_CLIENT_SECRET', 'GMAIL_REFRESH_TOKEN'];
+    const missing  = required.filter(k => !process.env[k]);
+    if (missing.length > 0) {
+        console.warn(`⚠️ Gmail API not configured. Missing env vars: ${missing.join(', ')}`);
+        return false;
     }
-    return ok;
+    return true;
 };
 
-// Send an email via Gmail SMTP
+// Get a fresh OAuth2 access token using the stored refresh token
+const getAccessToken = async () => {
+    const response = await axios.post('https://oauth2.googleapis.com/token', {
+        client_id:     process.env.GMAIL_CLIENT_ID,
+        client_secret: process.env.GMAIL_CLIENT_SECRET,
+        refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+        grant_type:    'refresh_token',
+    });
+    return response.data.access_token;
+};
+
+// Build a base64url-encoded RFC-2822 email message
+const buildRawEmail = ({ from, fromName, to, subject, html }) => {
+    const boundary = `boundary_${Date.now()}`;
+    const lines = [
+        `From: "${fromName}" <${from}>`,
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        'MIME-Version: 1.0',
+        `Content-Type: multipart/alternative; boundary="${boundary}"`,
+        '',
+        `--${boundary}`,
+        'Content-Type: text/plain; charset=UTF-8',
+        '',
+        'Please view this email in an HTML-capable email client.',
+        '',
+        `--${boundary}`,
+        'Content-Type: text/html; charset=UTF-8',
+        '',
+        html,
+        '',
+        `--${boundary}--`,
+    ];
+    return Buffer.from(lines.join('\r\n'))
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+};
+
+// Send an email via Gmail REST API (HTTPS — no SMTP ports needed)
 const sendEmail = async ({ to, subject, html, text }) => {
     if (!isEmailConfigured()) {
         throw new Error(
-            'Email service not configured. Set SMTP_USER (Gmail address) and SMTP_PASS (Gmail App Password) in your environment variables.'
+            'Gmail API not configured. Set GMAIL_USER, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN in your environment variables.'
         );
     }
 
-    if (!_transporter) {
-        _transporter = createTransporter();
-        console.log('✅ Gmail SMTP transporter ready (port 465 SSL)');
-    }
-
-    const fromEmail = process.env.SMTP_USER;
+    const fromEmail = process.env.GMAIL_USER;
     const fromName  = process.env.EMAIL_FROM_NAME || 'RideManager';
 
-    const mailOptions = {
-        from: `"${fromName}" <${fromEmail}>`,
-        to,
-        subject,
-        html,
-        text: text || subject,
-    };
-
-    console.log(`📧 Sending email to ${to} via Gmail SMTP (${fromEmail})...`);
+    console.log(`📧 Sending email to ${to} via Gmail API (${fromEmail})...`);
 
     try {
-        const info = await _transporter.sendMail(mailOptions);
-        console.log(`✅ Email sent successfully to ${to}  [msgId: ${info.messageId}]`);
-        return { success: true, messageId: info.messageId };
+        const accessToken = await getAccessToken();
+
+        const raw = buildRawEmail({ from: fromEmail, fromName, to, subject, html });
+
+        const response = await axios.post(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`,
+            { raw },
+            {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+
+        console.log(`✅ Email sent successfully to ${to}  [id: ${response.data.id}]`);
+        return { success: true, messageId: response.data.id };
     } catch (error) {
-        // Reset transporter so next attempt creates a fresh connection
-        _transporter = null;
-        console.error(`❌ Gmail SMTP failed: ${error.message}`);
-        throw error;
+        const detail = error.response?.data?.error?.message || error.message;
+        console.error(`❌ Gmail API failed: ${detail}`);
+        if (error.response?.data) {
+            console.error('   Response:', JSON.stringify(error.response.data));
+        }
+        throw new Error(`Failed to send email: ${detail}`);
     }
 };
+
 
 
 
