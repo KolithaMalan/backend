@@ -484,7 +484,7 @@ const notifyRideRejected = async (ride, rejectedByUser, reason = '') => {
 
             await sendEmail({
                 to: requester.email,
-                subject: `❌ Ride Request #${ride.rideId} - Rejected`,
+                subject: `Ride Request #${ride.rideId} - Rejected`,
                 html: emailHTML
             });
             
