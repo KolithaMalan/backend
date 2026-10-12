@@ -44,7 +44,7 @@ const buildRawEmail = ({ from, fromName, to, subject, html }) => {
     const lines = [
         `From: "${fromName}" <${from}>`,
         `To: ${to}`,
-        `Subject: ${subject}`,
+        `Subject: =?UTF-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`,
         'MIME-Version: 1.0',
         `Content-Type: multipart/alternative; boundary="${boundary}"`,
         '',
@@ -115,7 +115,7 @@ const sendEmail = async ({ to, subject, html, text }) => {
 const emailTemplates = {
     // ✅ Ride created notification to Admin (SHORT distance - ≤15km)
     rideCreatedForAdmin: (ride, user) => ({
-        subject: `🚗 New Ride Request #${ride.rideId} - Approval Required`,
+        subject: `New Ride Request #${ride.rideId} - Approval Required`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -172,7 +172,7 @@ const emailTemplates = {
 
     // ✅ Long distance ride notification to Admin (dual approval system)
     rideCreatedForAdminLongDistance: (ride, user) => ({
-        subject: `⚠️ Long Distance Ride #${ride.rideId} - Dual Approval Available`,
+        subject: `[Action Required] Long Distance Ride #${ride.rideId} - Dual Approval Available`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -221,7 +221,7 @@ const emailTemplates = {
 
     // Ride created notification to PM (>15km)
     rideCreatedForPM: (ride, user) => ({
-        subject: `⚠️ Long Distance Ride Request #${ride.rideId} - Approval Required`,
+        subject: `[Action Required] Long Distance Ride Request #${ride.rideId} - Approval Required`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -266,7 +266,7 @@ const emailTemplates = {
 
     // PM approved notification to Admin
     pmApprovedNotifyAdmin: (ride, user, pm) => ({
-        subject: `✅ PM Approved Ride #${ride.rideId} - Assign Driver & Vehicle`,
+        subject: `PM Approved Ride #${ride.rideId} - Assign Driver & Vehicle`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -299,7 +299,7 @@ const emailTemplates = {
 
     // PM approved notification to User
     pmApprovedNotifyUser: (ride, user) => ({
-        subject: `✅ Your Ride Request #${ride.rideId} - PM Approved`,
+        subject: `Your Ride Request #${ride.rideId} - PM Approved`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -325,7 +325,7 @@ const emailTemplates = {
 
     // Ride assigned notification to User
     rideAssignedToUser: (ride, user, driver, vehicle) => ({
-        subject: `🚗 Driver Assigned for Ride #${ride.rideId}`,
+        subject: `Driver Assigned for Ride #${ride.rideId}`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -358,7 +358,7 @@ const emailTemplates = {
 
     // Ride assigned notification to Driver
     rideAssignedToDriver: (ride, user, driver, vehicle) => ({
-        subject: `📋 New Ride Assignment #${ride.rideId}`,
+        subject: `New Ride Assignment #${ride.rideId}`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -395,7 +395,7 @@ const emailTemplates = {
 
     // Ride reassigned notification
     rideReassigned: (ride, user, newDriver, newVehicle, isOldDriver = false) => ({
-        subject: `🔄 Ride #${ride.rideId} - ${isOldDriver ? 'Reassigned to Another Driver' : 'Assignment Updated'}`,
+        subject: `Ride #${ride.rideId} - ${isOldDriver ? 'Reassigned to Another Driver' : 'Assignment Updated'}`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #ff9800 0%, #ffa726 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -430,7 +430,7 @@ const emailTemplates = {
 
     // Ride rejected notification
     rideRejected: (ride, user, rejectedBy) => ({
-        subject: `❌ Ride Request #${ride.rideId} - Rejected`,
+        subject: `Ride Request #${ride.rideId} - Rejected`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #c62828 0%, #d32f2f 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
@@ -462,7 +462,7 @@ const emailTemplates = {
 
     // Ride completed notification
     rideCompleted: (ride, user, driver, vehicle) => ({
-        subject: `✅ Ride #${ride.rideId} - Completed Successfully`,
+        subject: `Ride #${ride.rideId} - Completed Successfully`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
                 <div style="background: white; padding: 30px; border-radius: 8px;">
