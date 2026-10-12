@@ -260,7 +260,7 @@ const forgotPassword = async (req, res) => {
             const { sendEmail } = require('../services/emailService');
             await sendEmail({
                 to: user.email,
-                subject: '🔑 Password Reset Request - RideManager',
+                subject: 'Password Reset Request - RideManager',
                 html: `
                     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #1a5f2a 0%, #2e7d32 100%); border-radius: 10px;">
                         <div style="background: white; padding: 30px; border-radius: 8px;">
